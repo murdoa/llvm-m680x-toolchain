@@ -75,7 +75,7 @@
               mkdir -p $out/bin $out/lib
               for t in clang clang++ clang-cpp ld.lld lld llc llvm-mc llvm-ar \
                        llvm-ranlib llvm-objdump llvm-objcopy llvm-nm llvm-size \
-                       llvm-readelf llvm-cxxfilt; do
+                       llvm-readobj llvm-readelf llvm-cxxfilt; do
                 cp -P ${llvm-m6809}/bin/$t $out/bin/
               done
               # clang and friends are symlinks to clang-NN; copy that too.
@@ -89,6 +89,8 @@
             '';
 
             dontInstall = true;
+            # The host strip would mangle the 6809 objects and archives.
+            dontStrip = true;
 
             meta.description = "clang toolchain and runtime for the M6809";
           };
