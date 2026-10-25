@@ -10,7 +10,13 @@ difftest: m6809-sim
 	python3 difftest.py $(PYCORE) 2000 1
 	ONE=1 python3 difftest.py $(PYCORE) 4000 2
 
-clean:
-	rm -f m6809-sim
+# HD6309 instructions, checked by a self-checking program (needs lwasm).
+LWASM ?= ../../third_party/prefix/bin/lwasm
+test6309: m6809-sim
+	$(LWASM) --6309 --format=raw -o test6309.bin test6309.asm
+	./m6809-sim -6309 -load 1000 test6309.bin && echo "test6309: PASS"
 
-.PHONY: difftest clean
+clean:
+	rm -f m6809-sim test6309.bin
+
+.PHONY: difftest test6309 clean

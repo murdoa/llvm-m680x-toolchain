@@ -15,6 +15,12 @@
 //
 // The cycle counts are the datasheet base cycles plus the indexed-mode
 // extras. They are used for comparing code, not for timing peripherals.
+//
+// With -6309 it runs an HD6309 in emulation mode: the E, F, W, Q and V
+// registers, the extra instructions and indexed modes, with 6809 cycle
+// counts for the old instructions and approximate ones for the new. Native
+// mode (LDMD with NM set) is not supported. A division by zero stops the
+// program with status 133 (the HD6309 would trap).
 
 #include <stdint.h>
 #include <stdio.h>
@@ -27,11 +33,14 @@ enum { CC_C = 0x01, CC_V = 0x02, CC_Z = 0x04, CC_N = 0x08,
 enum { PORT_PUTCHAR = 0xFF00, PORT_EXIT = 0xFF01, PORT_GETCHAR = 0xFF02 };
 
 enum { STOP_NONE = -1, STOP_ABORT = 134, STOP_ILLEGAL = 132,
-       STOP_TIMEOUT = 124 };
+       STOP_TIMEOUT = 124, STOP_DIVZERO = 133 };
 
 typedef struct {
   uint8_t a, b, dp, cc;
   uint16_t x, y, u, s, pc;
+  uint8_t e, f, md; // HD6309 only
+  uint16_t v;
+  int h6309;
   uint8_t mem[0x10000];
   uint64_t cycles, insns;
   int stop;      // STOP_NONE while running, otherwise the exit status
@@ -89,6 +98,20 @@ static uint16_t getd(CPU *c) { return (uint16_t)(c->a << 8 | c->b); }
 static void setd(CPU *c, uint16_t v) {
   c->a = (uint8_t)(v >> 8);
   c->b = (uint8_t)v;
+}
+
+static uint16_t getw(CPU *c) { return (uint16_t)(c->e << 8 | c->f); }
+
+static void setw(CPU *c, uint16_t v) {
+  c->e = (uint8_t)(v >> 8);
+  c->f = (uint8_t)v;
+}
+
+static uint32_t getq(CPU *c) { return (uint32_t)getd(c) << 16 | getw(c); }
+
+static void setq(CPU *c, uint32_t v) {
+  setd(c, (uint16_t)(v >> 16));
+  setw(c, (uint16_t)v);
 }
 
 static void push8(CPU *c, uint16_t *sp, uint8_t v) { wr(c, --*sp, v); }
@@ -156,8 +179,8 @@ static uint8_t sub8(CPU *c, uint8_t a, uint8_t b, int borrow) {
   return (uint8_t)r;
 }
 
-static uint16_t add16(CPU *c, uint16_t a, uint16_t b) {
-  uint32_t r = (uint32_t)a + b;
+static uint16_t add16c(CPU *c, uint16_t a, uint16_t b, int carry) {
+  uint32_t r = (uint32_t)a + b + (uint32_t)carry;
   c->cc &= (uint8_t)~(CC_N | CC_Z | CC_V | CC_C);
   if (r & 0x10000) c->cc |= CC_C;
   if (~(a ^ b) & (a ^ r) & 0x8000) c->cc |= CC_V;
@@ -165,13 +188,87 @@ static uint16_t add16(CPU *c, uint16_t a, uint16_t b) {
   return (uint16_t)r;
 }
 
-static uint16_t sub16(CPU *c, uint16_t a, uint16_t b) {
-  uint32_t r = (uint32_t)a - b;
+static uint16_t sub16c(CPU *c, uint16_t a, uint16_t b, int borrow) {
+  uint32_t r = (uint32_t)a - b - (uint32_t)borrow;
   c->cc &= (uint8_t)~(CC_N | CC_Z | CC_V | CC_C);
   if (r & 0x10000) c->cc |= CC_C;
   if ((a ^ b) & (a ^ r) & 0x8000) c->cc |= CC_V;
   nz16(c, (uint16_t)r);
   return (uint16_t)r;
+}
+
+static uint16_t add16(CPU *c, uint16_t a, uint16_t b) {
+  return add16c(c, a, b, 0);
+}
+
+static uint16_t sub16(CPU *c, uint16_t a, uint16_t b) {
+  return sub16c(c, a, b, 0);
+}
+
+static void nz32(CPU *c, uint32_t r) {
+  c->cc &= (uint8_t)~(CC_N | CC_Z);
+  if (r & 0x80000000u) c->cc |= CC_N;
+  if (!r) c->cc |= CC_Z;
+}
+
+// The 16-bit unary ops of the HD6309 (NEGD, COMW, LSRD, ...), with the same
+// low-nibble numbering as rmw.
+static void rmw16(CPU *c, int op, uint16_t *v) {
+  uint16_t m = *v, r;
+  switch (op) {
+  case 0x0: r = sub16(c, 0, m); break; // NEG
+  case 0x3:                            // COM
+    r = (uint16_t)~m;
+    logic16(c, r);
+    c->cc |= CC_C;
+    break;
+  case 0x4: // LSR
+    r = m >> 1;
+    c->cc = (uint8_t)((c->cc & ~(CC_C | CC_N | CC_Z)) | (m & 1));
+    if (!r) c->cc |= CC_Z;
+    break;
+  case 0x6: // ROR
+    r = (uint16_t)((m >> 1) | ((c->cc & CC_C) << 15));
+    c->cc = (uint8_t)((c->cc & ~CC_C) | (m & 1));
+    nz16(c, r);
+    break;
+  case 0x7: // ASR
+    r = (uint16_t)((m >> 1) | (m & 0x8000));
+    c->cc = (uint8_t)((c->cc & ~CC_C) | (m & 1));
+    nz16(c, r);
+    break;
+  case 0x8: // ASL
+  case 0x9: // ROL
+    r = (uint16_t)((m << 1) | (op == 0x9 ? (c->cc & CC_C) : 0));
+    c->cc &= (uint8_t)~(CC_C | CC_V);
+    if (m & 0x8000) c->cc |= CC_C;
+    if ((m ^ (m << 1)) & 0x8000) c->cc |= CC_V;
+    nz16(c, r);
+    break;
+  case 0xA: // DEC
+    r = (uint16_t)(m - 1);
+    c->cc &= (uint8_t)~CC_V;
+    if (m == 0x8000) c->cc |= CC_V;
+    nz16(c, r);
+    break;
+  case 0xC: // INC
+    r = (uint16_t)(m + 1);
+    c->cc &= (uint8_t)~CC_V;
+    if (m == 0x7FFF) c->cc |= CC_V;
+    nz16(c, r);
+    break;
+  case 0xD: // TST
+    logic16(c, m);
+    return;
+  case 0xF: // CLR
+    r = 0;
+    c->cc = (uint8_t)((c->cc & ~(CC_N | CC_V | CC_C)) | CC_Z);
+    break;
+  default:
+    illegal(c);
+    return;
+  }
+  *v = r;
 }
 
 // Read-modify-write unary ops shared by the inherent, direct, indexed and
@@ -266,6 +363,27 @@ static uint16_t ea_indexed(CPU *c) {
   }
   int indirect = post & 0x10;
   uint16_t ea;
+  if (c->h6309 && (post & 0x1F) == 0x0F) { // ,W  n16,W  ,W++  ,--W
+    uint16_t w = getw(c);
+    switch ((post >> 5) & 3) {
+    case 0: ea = w; break;
+    case 1: ea = (uint16_t)(w + fetch16(c)); c->cycles += 2; break;
+    case 2: ea = w; setw(c, (uint16_t)(w + 2)); c->cycles += 1; break;
+    default: setw(c, (uint16_t)(w - 2)); ea = getw(c); c->cycles += 1; break;
+    }
+    return ea;
+  }
+  if (c->h6309 && (post & 0x1F) == 0x10) { // the same, indirect
+    uint16_t w = getw(c);
+    switch ((post >> 5) & 3) {
+    case 0: ea = w; break;
+    case 1: ea = (uint16_t)(w + fetch16(c)); c->cycles += 2; break;
+    case 2: ea = w; setw(c, (uint16_t)(w + 2)); c->cycles += 1; break;
+    default: setw(c, (uint16_t)(w - 2)); ea = getw(c); c->cycles += 1; break;
+    }
+    c->cycles += 3;
+    return rd16(c, ea);
+  }
   switch (post & 0x0F) {
   case 0x0: // ,R+
     if (indirect) goto bad;
@@ -290,6 +408,21 @@ static uint16_t ea_indexed(CPU *c) {
   case 0x4: ea = *r; break;
   case 0x5: ea = (uint16_t)(*r + (int8_t)c->b); c->cycles += 1; break;
   case 0x6: ea = (uint16_t)(*r + (int8_t)c->a); c->cycles += 1; break;
+  case 0x7: // E,R
+    if (!c->h6309) goto bad;
+    ea = (uint16_t)(*r + (int8_t)c->e);
+    c->cycles += 1;
+    break;
+  case 0xA: // F,R
+    if (!c->h6309) goto bad;
+    ea = (uint16_t)(*r + (int8_t)c->f);
+    c->cycles += 1;
+    break;
+  case 0xE: // W,R
+    if (!c->h6309) goto bad;
+    ea = (uint16_t)(*r + getw(c));
+    c->cycles += 1;
+    break;
   case 0x8: ea = (uint16_t)(*r + (int8_t)fetch(c)); c->cycles += 1; break;
   case 0x9: ea = (uint16_t)(*r + fetch16(c)); c->cycles += 4; break;
   case 0xB: ea = (uint16_t)(*r + getd(c)); c->cycles += 4; break;
@@ -356,8 +489,18 @@ static int cond(CPU *c, int n) {
 
 // ---------------------------------------------------------- register moves
 
-// Register for a TFR/EXG nibble; 16-bit codes 0-5, 8-bit codes 8-11.
+// Register for a TFR/EXG nibble; 16-bit codes 0-7, 8-bit codes 8-11, 14
+// and 15. Codes 6, 7 and 12-15 exist only on the HD6309; 12 and 13 are the
+// zero register, which fits either size.
 static int is16(int code) { return code < 8; }
+
+static int valid_reg(CPU *c, int code) {
+  if (c->h6309)
+    return 1;
+  return code <= 5 || (code >= 8 && code <= 11);
+}
+
+static int is_zero_reg(int code) { return code == 12 || code == 13; }
 
 static uint16_t getreg(CPU *c, int code) {
   switch (code) {
@@ -371,6 +514,11 @@ static uint16_t getreg(CPU *c, int code) {
   case 9: return c->b;
   case 10: return c->cc;
   case 11: return c->dp;
+  case 6: return getw(c);
+  case 7: return c->v;
+  case 14: return c->e;
+  case 15: return c->f;
+  case 12: case 13: return 0;
   default: return 0xFFFF;
   }
 }
@@ -387,6 +535,10 @@ static void setreg(CPU *c, int code, uint16_t v) {
   case 9: c->b = (uint8_t)v; break;
   case 10: c->cc = (uint8_t)v; break;
   case 11: c->dp = (uint8_t)v; break;
+  case 6: setw(c, v); break;
+  case 7: c->v = v; break;
+  case 14: c->e = (uint8_t)v; break;
+  case 15: c->f = (uint8_t)v; break;
   default: break;
   }
 }
@@ -394,8 +546,10 @@ static void setreg(CPU *c, int code, uint16_t v) {
 static void tfr_exg(CPU *c, int exg) {
   uint8_t post = fetch(c);
   int src = post >> 4, dst = post & 0xF;
-  if (is16(src) != is16(dst) || (src > 5 && src < 8) || src > 11 ||
-      (dst > 5 && dst < 8) || dst > 11) {
+  // Mixed sizes are legal on the HD6309 but have odd rules; nothing here
+  // uses them, so they stop the program.
+  if (!valid_reg(c, src) || !valid_reg(c, dst) ||
+      (is16(src) != is16(dst) && !is_zero_reg(src) && !is_zero_reg(dst))) {
     fprintf(stderr, "m6809-sim: invalid %s postbyte %02X at %04X\n",
             exg ? "EXG" : "TFR", post, c->op_pc);
     c->stop = STOP_ILLEGAL;
@@ -547,6 +701,310 @@ static void exec_acc(CPU *c, uint8_t op) {
   }
 }
 
+// ------------------------------------------------------ HD6309 additions
+
+static uint32_t fetch32(CPU *c) {
+  uint32_t hi = fetch16(c);
+  return hi << 16 | fetch16(c);
+}
+
+// Register-register ops ADDR..CMPR (page 2, 0x30-0x37): "op r0,r1" does
+// r1 = r1 op r0.
+static void exec_rr(CPU *c, int op) {
+  uint8_t post = fetch(c);
+  int src = post >> 4, dst = post & 0xF;
+  if (is16(src) != is16(dst) && !is_zero_reg(src) && !is_zero_reg(dst)) {
+    fprintf(stderr, "m6809-sim: mixed-size register op %02X at %04X\n", post,
+            c->op_pc);
+    c->stop = STOP_ILLEGAL;
+    return;
+  }
+  int wide = is_zero_reg(dst) ? is16(src) : is16(dst);
+  uint16_t a = getreg(c, dst), b = getreg(c, src), r;
+  int carry = c->cc & CC_C;
+  if (wide) {
+    switch (op) {
+    case 0: r = add16(c, a, b); break;
+    case 1: r = add16c(c, a, b, carry); break;
+    case 2: r = sub16(c, a, b); break;
+    case 3: r = sub16c(c, a, b, carry); break;
+    case 4: r = logic16(c, a & b); break;
+    case 5: r = logic16(c, a | b); break;
+    case 6: r = logic16(c, a ^ b); break;
+    default: sub16(c, a, b); return; // CMPR
+    }
+  } else {
+    uint8_t x = (uint8_t)a, y = (uint8_t)b;
+    switch (op) {
+    case 0: r = add8(c, x, y, 0); break;
+    case 1: r = add8(c, x, y, carry); break;
+    case 2: r = sub8(c, x, y, 0); break;
+    case 3: r = sub8(c, x, y, carry); break;
+    case 4: r = logic8(c, x & y); break;
+    case 5: r = logic8(c, x | y); break;
+    case 6: r = logic8(c, x ^ y); break;
+    default: sub8(c, x, y, 0); return; // CMPR
+    }
+  }
+  setreg(c, dst, r);
+}
+
+// DIVD: D / 8-bit, quotient in B and remainder in A. DIVQ: Q / 16-bit,
+// quotient in W and remainder in D. Both signed. A quotient that does not
+// fit the signed width but fits the unsigned one is stored with V set; one
+// that fits neither leaves the registers alone.
+static void divide(CPU *c, int quad, uint16_t m) {
+  int32_t num = quad ? (int32_t)getq(c) : (int16_t)getd(c);
+  int32_t den = quad ? (int16_t)m : (int8_t)m;
+  if (!den) {
+    fprintf(stderr, "m6809-sim: division by zero at %04X\n", c->op_pc);
+    c->stop = STOP_DIVZERO;
+    return;
+  }
+  int64_t q = (int64_t)num / den, r = (int64_t)num % den;
+  int64_t lim = quad ? 0x8000 : 0x80;
+  c->cc &= (uint8_t)~(CC_N | CC_Z | CC_V | CC_C);
+  if (q < -2 * lim || q >= 2 * lim) {
+    c->cc |= CC_V;
+    return;
+  }
+  if (q < -lim || q >= lim)
+    c->cc |= CC_V | CC_N;
+  if (quad) {
+    setw(c, (uint16_t)q);
+    setd(c, (uint16_t)r);
+    if ((uint16_t)q & 0x8000) c->cc |= CC_N;
+    if (!(uint16_t)q) c->cc |= CC_Z;
+  } else {
+    c->b = (uint8_t)q;
+    c->a = (uint8_t)r;
+    if ((uint8_t)q & 0x80) c->cc |= CC_N;
+    if (!(uint8_t)q) c->cc |= CC_Z;
+  }
+  if (q & 1) c->cc |= CC_C;
+}
+
+// Page 0 opcodes that only the HD6309 has. Returns 0 if op is not one.
+static int exec6309_page0(CPU *c, uint8_t op) {
+  int row = op >> 4, col = op & 0xF;
+  if ((row == 0x0 || row == 0x6 || row == 0x7) &&
+      (col == 0x1 || col == 0x2 || col == 0x5 || col == 0xB)) {
+    uint8_t imm = fetch(c);
+    c->cycles += row == 0x0 ? 6 : 7;
+    uint16_t ea = ea_mode(c, row == 0x0 ? 1 : row == 0x6 ? 2 : 3);
+    uint8_t v = rd(c, ea);
+    switch (col) {
+    case 0x1: wr(c, ea, logic8(c, v | imm)); break; // OIM
+    case 0x2: wr(c, ea, logic8(c, v & imm)); break; // AIM
+    case 0x5: wr(c, ea, logic8(c, v ^ imm)); break; // EIM
+    default: logic8(c, v & imm); break;            // TIM
+    }
+    return 1;
+  }
+  if (op == 0x14) { // SEXW
+    setd(c, (getw(c) & 0x8000) ? 0xFFFF : 0);
+    nz32(c, getq(c));
+    c->cycles += 4;
+    return 1;
+  }
+  if (op == 0xCD) { // LDQ #imm
+    setq(c, fetch32(c));
+    nz32(c, getq(c));
+    c->cc &= (uint8_t)~CC_V;
+    c->cycles += 5;
+    return 1;
+  }
+  return 0;
+}
+
+// Page 2 and page 3 opcodes that only the HD6309 has. Returns 0 if op is
+// not one.
+static int exec6309_page23(CPU *c, int page, uint8_t op) {
+  int row = op >> 4, col = op & 0xF, mode = (op >> 4) & 3;
+  if (page == 2) {
+    if (op >= 0x30 && op <= 0x37) {
+      c->cycles += 4;
+      exec_rr(c, op & 7);
+      return 1;
+    }
+    if (op >= 0x38 && op <= 0x3B) { // PSHSW, PULSW, PSHUW, PULUW
+      uint16_t *sp = op < 0x3A ? &c->s : &c->u;
+      c->cycles += 6;
+      if (op & 1)
+        setw(c, pull16(c, sp));
+      else
+        push16(c, sp, getw(c));
+      return 1;
+    }
+    if (row == 0x4 || row == 0x5) {
+      static const char D_OPS[16] = {1, 0, 0, 1, 1, 0, 1, 1,
+                                     1, 1, 1, 0, 1, 1, 0, 1};
+      static const char W_OPS[16] = {0, 0, 0, 1, 1, 0, 1, 0,
+                                     0, 1, 1, 0, 1, 1, 0, 1};
+      if (!(row == 0x4 ? D_OPS : W_OPS)[col])
+        return 0;
+      uint16_t v = row == 0x4 ? getd(c) : getw(c);
+      rmw16(c, col, &v);
+      if (row == 0x4) setd(c, v);
+      else setw(c, v);
+      c->cycles += 3;
+      return 1;
+    }
+    if (op >= 0x80 && op < 0xC0) {
+      if (col == 0x3 || col == 0xC || col == 0xD || col == 0xE ||
+          col == 0xF)
+        return 0; // CMPD, CMPY, LDY, STY and holes: the 6809 code
+      c->cycles += mode == 0 ? 5 : mode == 3 ? 8 : 7;
+      if (col == 0x7) { // STW
+        if (mode == 0) return 0;
+        uint16_t ea = ea_mode(c, mode);
+        wr16(c, ea, logic16(c, getw(c)));
+        return 1;
+      }
+      uint16_t m = mode == 0 ? fetch16(c) : rd16(c, ea_mode(c, mode));
+      uint16_t d = getd(c), w = getw(c);
+      int carry = c->cc & CC_C;
+      switch (col) {
+      case 0x0: setw(c, sub16(c, w, m)); break;            // SUBW
+      case 0x1: sub16(c, w, m); break;                     // CMPW
+      case 0x2: setd(c, sub16c(c, d, m, carry)); break;    // SBCD
+      case 0x4: setd(c, logic16(c, d & m)); break;         // ANDD
+      case 0x5: logic16(c, d & m); break;                  // BITD
+      case 0x6: setw(c, logic16(c, m)); break;             // LDW
+      case 0x8: setd(c, logic16(c, d ^ m)); break;         // EORD
+      case 0x9: setd(c, add16c(c, d, m, carry)); break;    // ADCD
+      case 0xA: setd(c, logic16(c, d | m)); break;         // ORD
+      default: setw(c, add16(c, w, m)); break;             // ADDW
+      }
+      return 1;
+    }
+    if (op >= 0xD0 && (col == 0xC || col == 0xD)) { // LDQ, STQ
+      c->cycles += mode == 3 ? 9 : 8;
+      uint16_t ea = ea_mode(c, mode);
+      if (col == 0xC) {
+        uint32_t hi = rd16(c, ea);
+        setq(c, hi << 16 | rd16(c, (uint16_t)(ea + 2)));
+      } else {
+        wr16(c, ea, getd(c));
+        wr16(c, (uint16_t)(ea + 2), getw(c));
+      }
+      nz32(c, getq(c));
+      c->cc &= (uint8_t)~CC_V;
+      return 1;
+    }
+    return 0;
+  }
+
+  // Page 3.
+  if (op >= 0x30 && op <= 0x37) { // BAND .. STBT
+    uint8_t post = fetch(c);
+    uint16_t ea = (uint16_t)(c->dp << 8 | fetch(c));
+    int rsel = post >> 6, mbit = (post >> 3) & 7, rbit = post & 7;
+    if (rsel == 3)
+      return 0;
+    uint8_t *r = rsel == 0 ? &c->cc : rsel == 1 ? &c->a : &c->b;
+    uint8_t m = rd(c, ea);
+    int mb = (m >> mbit) & 1, rb = (*r >> rbit) & 1, out;
+    c->cycles += 7;
+    switch (op & 7) {
+    case 0: out = rb & mb; break;   // BAND
+    case 1: out = rb & !mb; break;  // BIAND
+    case 2: out = rb | mb; break;   // BOR
+    case 3: out = rb | !mb; break;  // BIOR
+    case 4: out = rb ^ mb; break;   // BEOR
+    case 5: out = rb ^ !mb; break;  // BIEOR
+    case 6: out = mb; break;        // LDBT
+    default:                        // STBT
+      wr(c, ea, (uint8_t)((m & ~(1 << mbit)) | rb << mbit));
+      return 1;
+    }
+    *r = (uint8_t)((*r & ~(1 << rbit)) | out << rbit);
+    return 1;
+  }
+  if (op >= 0x38 && op <= 0x3B) { // TFM
+    uint8_t post = fetch(c);
+    int src = post >> 4, dst = post & 0xF;
+    if (src > 4 || dst > 4) {
+      fprintf(stderr, "m6809-sim: invalid TFM postbyte %02X at %04X\n", post,
+              c->op_pc);
+      c->stop = STOP_ILLEGAL;
+      return 1;
+    }
+    int ds = op == 0x38 || op == 0x3A ? 1 : op == 0x39 ? -1 : 0;
+    int dd = op == 0x38 || op == 0x3B ? 1 : op == 0x39 ? -1 : 0;
+    c->cycles += 6;
+    while (getw(c)) {
+      uint16_t s = getreg(c, src), d = getreg(c, dst);
+      wr(c, d, rd(c, s));
+      setreg(c, src, (uint16_t)(s + ds));
+      setreg(c, dst, (uint16_t)(d + dd));
+      setw(c, (uint16_t)(getw(c) - 1));
+      c->cycles += 3;
+    }
+    return 1;
+  }
+  if (op == 0x3C) { // BITMD
+    uint8_t m = fetch(c) & 0xC0;
+    c->cc = (uint8_t)((c->cc & ~CC_Z) | ((c->md & m) ? 0 : CC_Z));
+    c->md &= (uint8_t)~m;
+    c->cycles += 4;
+    return 1;
+  }
+  if (op == 0x3D) { // LDMD
+    uint8_t m = fetch(c);
+    if (m & 1) {
+      fprintf(stderr, "m6809-sim: native mode is not supported (%04X)\n",
+              c->op_pc);
+      c->stop = STOP_ILLEGAL;
+      return 1;
+    }
+    c->md = (uint8_t)((c->md & 0xC0) | (m & 3));
+    c->cycles += 5;
+    return 1;
+  }
+  if (row == 0x4 || row == 0x5) { // E and F unary ops
+    if (col != 0x3 && col != 0xA && col != 0xC && col != 0xD && col != 0xF)
+      return 0;
+    rmw(c, col, row == 0x4 ? &c->e : &c->f);
+    c->cycles += 3;
+    return 1;
+  }
+  if (op >= 0x80) {
+    int isf = op >= 0xC0;
+    uint8_t *r = isf ? &c->f : &c->e;
+    if (col == 0x0 || col == 0x1 || col == 0x6 || col == 0xB) {
+      uint8_t m = mode == 0 ? fetch(c) : rd(c, ea_mode(c, mode));
+      c->cycles += mode == 0 ? 3 : mode == 3 ? 6 : 5;
+      acc_op(c, r, col, m);
+      return 1;
+    }
+    if (col == 0x7 && mode != 0) { // STE, STF
+      c->cycles += mode == 3 ? 6 : 5;
+      wr(c, ea_mode(c, mode), logic8(c, *r));
+      return 1;
+    }
+    if (!isf && (col == 0xD || col == 0xE || col == 0xF)) {
+      uint16_t m;
+      if (col == 0xD) // DIVD takes an 8-bit operand
+        m = mode == 0 ? fetch(c) : rd(c, ea_mode(c, mode));
+      else
+        m = mode == 0 ? fetch16(c) : rd16(c, ea_mode(c, mode));
+      if (col == 0xF) { // MULD
+        int32_t p = (int32_t)(int16_t)getd(c) * (int16_t)m;
+        setq(c, (uint32_t)p);
+        nz32(c, (uint32_t)p);
+        c->cc &= (uint8_t)~(CC_V | CC_C);
+        c->cycles += 28;
+      } else {
+        divide(c, col == 0xE, m);
+        c->cycles += col == 0xD ? 25 : 34;
+      }
+      return 1;
+    }
+  }
+  return 0;
+}
+
 // Page 2 (0x10 prefix) and page 3 (0x11 prefix).
 static void exec_page23(CPU *c, int page) {
   uint8_t op = fetch(c);
@@ -565,6 +1023,8 @@ static void exec_page23(CPU *c, int page) {
     swi(c, page == 2 ? 0xFFF4 : 0xFFF2, 0);
     return;
   }
+  if (c->h6309 && exec6309_page23(c, page, op))
+    return;
   int mode = (op >> 4) & 3;
   int col = op & 0xF;
   if (op < 0x80 || (op >= 0xC0 && page == 3)) { illegal(c); return; }
@@ -617,6 +1077,8 @@ static void step(CPU *c) {
     exec_page23(c, op == 0x10 ? 2 : 3);
     return;
   }
+  if (c->h6309 && exec6309_page0(c, op))
+    return;
   if (!CYCLES[op]) {
     illegal(c);
     return;
@@ -804,7 +1266,8 @@ static void usage(void) {
           "  -trace        print each instruction on stderr\n"
           "  -stats        print instruction and cycle counts on stderr\n"
           "  -noports      plain machine: no test ports, SWI is an interrupt\n"
-          "  -dump         print the final registers and a memory checksum\n");
+          "  -dump         print the final registers and a memory checksum\n"
+          "  -6309         run as an HD6309 in emulation mode\n");
   exit(2);
 }
 
@@ -831,6 +1294,8 @@ int main(int argc, char **argv) {
       c->noports = 1;
     else if (!strcmp(argv[i], "-dump"))
       dump = 1;
+    else if (!strcmp(argv[i], "-6309"))
+      c->h6309 = 1;
     else if (argv[i][0] == '-' || path)
       usage();
     else
@@ -874,8 +1339,11 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < 0x10000; i++)
       h = (h ^ c->mem[i]) * 16777619u;
     printf("A=%02X B=%02X DP=%02X CC=%02X X=%04X Y=%04X U=%04X S=%04X "
-           "PC=%04X MEM=%08X\n", c->a, c->b, c->dp, c->cc, c->x, c->y, c->u,
+           "PC=%04X MEM=%08X", c->a, c->b, c->dp, c->cc, c->x, c->y, c->u,
            c->s, c->pc, h);
+    if (c->h6309)
+      printf(" E=%02X F=%02X V=%04X MD=%02X", c->e, c->f, c->v, c->md);
+    printf("\n");
   }
   fflush(stdout);
   if (stats)

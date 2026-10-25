@@ -5,3 +5,4 @@ tools/m6809-sim/m6809-sim
 runtime/out/
 third_party/
 tools/torture/results-*.txt
+tools/m6809-sim/test6309.bin
