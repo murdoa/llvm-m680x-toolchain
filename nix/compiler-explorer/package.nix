@@ -1,7 +1,7 @@
 # Compiler Explorer (godbolt.org), built from source. It is not in nixpkgs.
 # The source comes from the `compiler-explorer` flake input; after bumping it
 # with `nix flake update compiler-explorer`, update npmDepsHash too.
-{ lib, buildNpmPackage, nodejs_22, makeWrapper, src }:
+{ lib, buildNpmPackage, nodejs_22, makeWrapper, file, src }:
 
 buildNpmPackage {
   pname = "compiler-explorer";
@@ -16,6 +16,12 @@ buildNpmPackage {
   # Cypress is only for CE's browser tests; don't let it download Electron.
   env.CYPRESS_INSTALL_BINARY = "0";
   env.HUSKY = "0";
+
+  # CE runs /usr/bin/file to check binaries before executing them.
+  postPatch = ''
+    substituteInPlace lib/binaries/binary-utils.ts \
+      --replace-fail /usr/bin/file ${lib.getExe file}
+  '';
 
   # The same steps as `make prebuild`: bundle the front end with webpack and
   # compile the server to out/dist.
