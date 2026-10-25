@@ -44,7 +44,7 @@ LIBC_OBJS := $(LIBC_SRCS:libc/%.c=$(OUT)/libc/%.o) \
   $(LIBC_ASM:libc/%.S=$(OUT)/libc/%.o)
 
 all: $(OUT)/crt0.o $(OUT)/libclang_rt.builtins.a $(OUT)/libc.a \
-  $(OUT)/libm6809sim.a
+  $(OUT)/libm.a $(OUT)/libm6809sim.a
 
 $(OUT)/crt0.o: crt0.S
 	@mkdir -p $(@D)
@@ -74,6 +74,12 @@ $(OUT)/libc.a: $(LIBC_OBJS)
 	rm -f $@
 	$(AR) rcs $@ $^
 
+# The math functions are in libc.a; libm.a is empty so that -lm works.
+$(OUT)/libm.a:
+	@mkdir -p $(@D)
+	rm -f $@
+	$(AR) rcs $@
+
 $(OUT)/sim/sim.o: sim/sim.c
 	@mkdir -p $(@D)
 	$(CC) $(LIBC_CFLAGS) -c $< -o $@
@@ -84,7 +90,8 @@ $(OUT)/libm6809sim.a: $(OUT)/sim/sim.o
 
 install: all
 	mkdir -p $(SYSROOT)/lib $(SYSROOT)/include $(RESOURCE_DIR)/lib/m6809
-	cp $(OUT)/crt0.o $(OUT)/libc.a $(OUT)/libm6809sim.a sim/m6809-sim.ld \
+	cp $(OUT)/crt0.o $(OUT)/libc.a $(OUT)/libm.a $(OUT)/libm6809sim.a \
+	  sim/m6809-sim.ld \
 	  $(SYSROOT)/lib/
 	cp libc/include/*.h $(SYSROOT)/include/
 	cp $(OUT)/libclang_rt.builtins.a $(RESOURCE_DIR)/lib/m6809/
