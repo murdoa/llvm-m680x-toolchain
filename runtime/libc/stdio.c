@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
-int __m6809_putc(int c);
-int __m6809_getc(void);
+int __board_putc(int c);
+int __board_getc(void);
 
 struct __file {
   int unused;
@@ -18,19 +18,19 @@ FILE *const stdin = &files[0];
 FILE *const stdout = &files[1];
 FILE *const stderr = &files[2];
 
-int putchar(int c) { return __m6809_putc(c); }
-int getchar(void) { return __m6809_getc(); }
-int fputc(int c, FILE *f) { return __m6809_putc(c); }
+int putchar(int c) { return __board_putc(c); }
+int getchar(void) { return __board_getc(); }
+int fputc(int c, FILE *f) { return __board_putc(c); }
 
 int fputs(const char *s, FILE *f) {
   while (*s)
-    __m6809_putc(*s++);
+    __board_putc(*s++);
   return 0;
 }
 
 int puts(const char *s) {
   fputs(s, stdout);
-  __m6809_putc('\n');
+  __board_putc('\n');
   return 0;
 }
 
@@ -45,7 +45,7 @@ static void emit(struct out *o, char c) {
     if (o->len + 1 < o->size)
       o->buf[o->len] = c;
   } else {
-    __m6809_putc(c);
+    __board_putc(c);
   }
   ++o->len;
 }

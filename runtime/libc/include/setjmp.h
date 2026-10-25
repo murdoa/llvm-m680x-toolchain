@@ -3,7 +3,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// U (the only callee-saved register), S after the return, and the return
+// On the 6809: U (the only callee-saved register), S after the return, and
+// the return address. On the 6800: SP after the return and the return
 // address.
 typedef unsigned short jmp_buf[3];
 int setjmp(jmp_buf env) __attribute__((returns_twice));
