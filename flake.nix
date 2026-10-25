@@ -19,7 +19,7 @@
     in {
       packages = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in {
-          # llc, llvm-mc, opt etc. with only the M6809 target enabled.
+          # llc, llvm-mc, opt etc. with only the M6809 and M6800 targets.
           llvm-m6809 = pkgs.stdenv.mkDerivation {
             pname = "llvm-m6809";
             version = "unstable-${llvm-project.lastModifiedDate}";
@@ -32,14 +32,14 @@
               "-DCMAKE_BUILD_TYPE=Release"
               "-DLLVM_ENABLE_ASSERTIONS=ON"
               "-DLLVM_TARGETS_TO_BUILD="
-              "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=M6809"
+              "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=M6809;M6800"
               "-DLLVM_INCLUDE_BENCHMARKS=OFF"
               "-DLLVM_INCLUDE_EXAMPLES=OFF"
               "-DLLVM_INCLUDE_TESTS=OFF"
               "-DLLVM_PARALLEL_LINK_JOBS=2"
             ];
 
-            meta.description = "LLVM tools with the experimental M6809 backend";
+            meta.description = "LLVM tools with the experimental M6809 and M6800 backends";
           };
 
           default = self.packages.${system}.llvm-m6809;
