@@ -2,6 +2,7 @@ build/
 llvm-project/
 result
 tools/m6809-sim/m6809-sim
+tools/m6800-sim/m6800-sim
 runtime/out/
 third_party/
 tools/torture/results-*.txt
