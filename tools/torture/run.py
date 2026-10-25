@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run GCC's c-torture/execute tests on m6809-sim.
 
-usage: run.py [-O LEVEL] [-j JOBS] [--cpu CPU] [--max N] [TEST ...]
+usage: run.py [-O LEVEL] [-j JOBS] [--cpu CPU] [--sim-cpu CPU] [--max N] [TEST ...]
 
 Each test is compiled with clang --target=m6809, linked for the simulator
 and run. A test passes when it exits with status 0. Tests that cannot apply
@@ -103,7 +103,7 @@ def directives(src):
 
 
 def run_one(args):
-    name, opt, cpu, max_insns = args
+    name, opt, cpu, sim_cpu, max_insns = args
     path = os.path.join(TORTURE, name + '.c')
     with open(path, errors='replace') as f:
         src = f.read()
@@ -144,7 +144,9 @@ def run_one(args):
             first = next((l for l in err.splitlines() if 'error' in l), '')
             return name, 'COMPILE-ERROR', first.strip()[:200]
         try:
-            r = subprocess.run([SIM, '-max', str(max_insns), exe],
+            sim_flags = ['-6309'] if sim_cpu == '6309' else []
+            r = subprocess.run([SIM, '-max', str(max_insns)] + sim_flags +
+                               [exe],
                                capture_output=True, text=True,
                                errors='replace', timeout=600)
         except subprocess.TimeoutExpired:
@@ -153,7 +155,8 @@ def run_one(args):
             return name, 'PASS', ''
         if r.returncode == 124:
             return name, 'TIMEOUT', 'instruction limit'
-        detail = {134: 'abort', 132: 'undefined instruction'}.get(
+        detail = {134: 'abort', 132: 'undefined instruction',
+              133: 'division by zero'}.get(
             r.returncode, f'exit {r.returncode}')
         return name, 'FAIL', (detail + ' ' + r.stderr.strip())[:200]
 
@@ -164,13 +167,17 @@ def main():
     ap.add_argument('-j', dest='jobs', type=int,
                     default=multiprocessing.cpu_count())
     ap.add_argument('--cpu', default='6809')
+    ap.add_argument('--sim-cpu', help='CPU to simulate (default: --cpu); '
+                    '--cpu 6809 --sim-cpu 6309 checks that 6809 code runs '
+                    'unchanged on an HD6309')
     ap.add_argument('--max', type=int, default=3_000_000_000)
     ap.add_argument('tests', nargs='*')
     a = ap.parse_args()
 
     names = a.tests or sorted(f[:-2] for f in os.listdir(TORTURE)
                               if f.endswith('.c'))
-    work = [(n, a.opt, a.cpu, a.max) for n in names]
+    sim_cpu = a.sim_cpu or a.cpu
+    work = [(n, a.opt, a.cpu, sim_cpu, a.max) for n in names]
     known = known_failures()
     results = []
     with multiprocessing.Pool(a.jobs) as pool:
@@ -189,7 +196,9 @@ def main():
     for _, status, _ in results:
         counts[status] = counts.get(status, 0) + 1
     if not a.tests:
-        out = os.path.join(HERE, f'results-O{a.opt}-{a.cpu}.txt')
+        out = os.path.join(HERE, f'results-O{a.opt}-{a.cpu}' +
+                           (f'-on-{sim_cpu}' if sim_cpu != a.cpu else '') +
+                           '.txt')
         with open(out, 'w') as f:
             for name, status, detail in results:
                 f.write(f'{name}\t{status}\t{detail}\n')
