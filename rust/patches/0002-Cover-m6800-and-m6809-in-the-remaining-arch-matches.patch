@@ -1,0 +1,36 @@
+From d1abc35da29d74ef06056d6bc09109694d8e073d Mon Sep 17 00:00:00 2001
+From: murdoa <murdoa@protonmail.com>
+Date: Sun, 25 Oct 2026 16:09:34 +0000
+Subject: [PATCH 2/5] Cover m6800 and m6809 in the remaining arch matches
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ compiler/rustc_target/src/spec/mod.rs | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+index 36eb3fec3..d17184c30 100644
+--- a/compiler/rustc_target/src/spec/mod.rs
++++ b/compiler/rustc_target/src/spec/mod.rs
+@@ -1846,7 +1846,8 @@ pub fn supports_scalable_vectors(&self) -> bool {
+         match self {
+             AArch64 | RiscV32 | RiscV64 => true,
+             AmdGpu | Arm | Arm64EC | Avr | Bpf | CSky | Hexagon | LoongArch32 | LoongArch64
+-            | M68k | Mips | Mips32r6 | Mips64 | Mips64r6 | Msp430 | Nvptx64 | PowerPC
++            | M68k | M6800 | M6809 | Mips | Mips32r6 | Mips64 | Mips64r6 | Msp430 | Nvptx64
++            | PowerPC
+             | PowerPC64 | S390x | Sparc | Sparc64 | SpirV | Wasm32 | Wasm64 | X86 | X86_64
+             | Xtensa | Other(_) => false,
+         }
+@@ -2131,7 +2132,7 @@ pub fn supports_c_variadic_definitions(&self) -> CVariadicStatus {
+             // - Check that calling c-variadic functions defined in Rust can be called from C.
+             // For most targets `tests/run-make/c-link-to-rust-va-list-fn` can be used here.
+             // For no_std targets a manual setup may be needed.
+-            Sparc | Avr | M68k | Msp430 => {
++            Sparc | Avr | M68k | M6800 | M6809 | Msp430 => {
+                 CVariadicStatus::Unstable { feature: sym::c_variadic_experimental_arch }
+             }
+ 
+-- 
+2.51.2
+

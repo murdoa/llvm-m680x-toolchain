@@ -58,6 +58,6 @@ Each item can be checked.
 | M4 | MC encoder, ELF relocations, lld | No outside tools needed (**done**) |
 | M5 | HD6309 subtarget | Extended CPU support (**done**: c-torture passes at -O0, -O2 and -Oz with `-mcpu=6309`, and 6809 code passes unchanged on the HD6309 simulator; -Oz size is 0.92 of CMOC against 0.97 for the 6809, and -O2 code takes 0.66 of the 6809 cycles, see tools/size and tools/cycles) |
 | M6 | M6800 backend for the HD6301 | Second backend |
-| M7 | Rust `core` on both backends | Rust |
+| M7 | Rust `core` on both backends | Rust (**done**: `m6809-none-elf` and `m6800-none-elf` build `core` and `alloc`, and a no_std test with traits, `Option`, u64 and f32 runs on the 6809, HD6309 and HD6301 at -O0, -O2 and -Oz; see rust/) |
 | M8 | Solartron routines replaced on both CPUs | Real-world proof |
 | M9 | Clean-up and RFC | Upstream |

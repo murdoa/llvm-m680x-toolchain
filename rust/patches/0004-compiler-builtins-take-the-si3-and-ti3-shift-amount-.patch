@@ -1,0 +1,80 @@
+From aea07b2bee4d78b9e6a6af9ecd352e65db1b75e0 Mon Sep 17 00:00:00 2001
+From: murdoa <murdoa@protonmail.com>
+Date: Sun, 25 Oct 2026 16:39:45 +0000
+Subject: [PATCH 4/5] compiler-builtins: take the si3 and ti3 shift amount as
+ c_uint
+
+LLVM passes the amount of a shift libcall as a C int, as compiler-rt
+declares it, and the di3 shifts already take c_uint. On a target with
+16-bit int the si3 and ti3 shifts read a 32-bit amount from the wrong
+place: on m6809, u64 division gave wrong results.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../compiler-builtins/src/int/shift.rs        | 24 +++++++++----------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/library/compiler-builtins/compiler-builtins/src/int/shift.rs b/library/compiler-builtins/compiler-builtins/src/int/shift.rs
+index f5cac9ad4..607f2dc1c 100644
+--- a/library/compiler-builtins/compiler-builtins/src/int/shift.rs
++++ b/library/compiler-builtins/compiler-builtins/src/int/shift.rs
+@@ -70,8 +70,8 @@ impl Lshr for u128 {}
+ 
+ intrinsics! {
+     #[maybe_use_optimized_c_shim]
+-    pub extern "C" fn __ashlsi3(a: u32, b: u32) -> u32 {
+-        a.ashl(b)
++    pub extern "C" fn __ashlsi3(a: u32, b: core::ffi::c_uint) -> u32 {
++        a.ashl(b as u32)
+     }
+ 
+     #[maybe_use_optimized_c_shim]
+@@ -80,13 +80,13 @@ pub extern "C" fn __ashldi3(a: u64, b: core::ffi::c_uint) -> u64 {
+         a.ashl(b as u32)
+     }
+ 
+-    pub extern "C" fn __ashlti3(a: u128, b: u32) -> u128 {
+-        a.ashl(b)
++    pub extern "C" fn __ashlti3(a: u128, b: core::ffi::c_uint) -> u128 {
++        a.ashl(b as u32)
+     }
+ 
+     #[maybe_use_optimized_c_shim]
+-    pub extern "C" fn __ashrsi3(a: i32, b: u32) -> i32 {
+-        a.ashr(b)
++    pub extern "C" fn __ashrsi3(a: i32, b: core::ffi::c_uint) -> i32 {
++        a.ashr(b as u32)
+     }
+ 
+     #[maybe_use_optimized_c_shim]
+@@ -95,13 +95,13 @@ pub extern "C" fn __ashrdi3(a: i64, b: core::ffi::c_uint) -> i64 {
+         a.ashr(b as u32)
+     }
+ 
+-    pub extern "C" fn __ashrti3(a: i128, b: u32) -> i128 {
+-        a.ashr(b)
++    pub extern "C" fn __ashrti3(a: i128, b: core::ffi::c_uint) -> i128 {
++        a.ashr(b as u32)
+     }
+ 
+     #[maybe_use_optimized_c_shim]
+-    pub extern "C" fn __lshrsi3(a: u32, b: u32) -> u32 {
+-        a.lshr(b)
++    pub extern "C" fn __lshrsi3(a: u32, b: core::ffi::c_uint) -> u32 {
++        a.lshr(b as u32)
+     }
+ 
+     #[maybe_use_optimized_c_shim]
+@@ -110,7 +110,7 @@ pub extern "C" fn __lshrdi3(a: u64, b: core::ffi::c_uint) -> u64 {
+         a.lshr(b as u32)
+     }
+ 
+-    pub extern "C" fn __lshrti3(a: u128, b: u32) -> u128 {
+-        a.lshr(b)
++    pub extern "C" fn __lshrti3(a: u128, b: core::ffi::c_uint) -> u128 {
++        a.lshr(b as u32)
+     }
+ }
+-- 
+2.51.2
+

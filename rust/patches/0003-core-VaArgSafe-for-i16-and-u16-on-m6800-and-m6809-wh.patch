@@ -1,0 +1,32 @@
+From bcce4c8b7a5125a213acdec48f84365c25121264 Mon Sep 17 00:00:00 2001
+From: murdoa <murdoa@protonmail.com>
+Date: Sun, 25 Oct 2026 16:39:45 +0000
+Subject: [PATCH 3/5] core: VaArgSafe for i16 and u16 on m6800 and m6809, whose
+ int is 16 bits
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ library/core/src/ffi/va_list.rs | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/library/core/src/ffi/va_list.rs b/library/core/src/ffi/va_list.rs
+index 74213005b..c9aa2b2a7 100644
+--- a/library/core/src/ffi/va_list.rs
++++ b/library/core/src/ffi/va_list.rs
+@@ -313,7 +313,12 @@ fn drop(&mut self) {
+ pub impl(self) unsafe trait VaArgSafe {}
+ 
+ crate::cfg_select! {
+-    any(target_arch = "avr", target_arch = "msp430") => {
++    any(
++        target_arch = "avr",
++        target_arch = "m6800",
++        target_arch = "m6809",
++        target_arch = "msp430"
++    ) => {
+         // c_int/c_uint are i16/u16 on these targets.
+         //
+         // - i8 is implicitly promoted to c_int in C, and cannot implement `VaArgSafe`.
+-- 
+2.51.2
+

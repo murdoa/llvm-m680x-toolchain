@@ -1,0 +1,383 @@
+From 21d1fa8d86111256be723a4fb82b526ed18ce14b Mon Sep 17 00:00:00 2001
+From: murdoa <murdoa@protonmail.com>
+Date: Sun, 25 Oct 2026 16:05:29 +0000
+Subject: [PATCH 1/5] Add the m6809-none-elf and m6800-none-elf targets
+
+Both drive the LLVM M6809 and M6800 backends: 16-bit pointers and int,
+big-endian, byte-aligned, no atomics, panic=abort. The C calling
+convention matches clang: aggregates are passed byval and returned
+through a hidden pointer, and small integers are extended to 16 bits.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ compiler/rustc_codegen_llvm/src/va_arg.rs     |  2 +-
+ compiler/rustc_llvm/build.rs                  |  2 +
+ compiler/rustc_llvm/src/lib.rs                | 16 +++++++
+ compiler/rustc_span/src/symbol.rs             |  2 +
+ compiler/rustc_target/src/asm/mod.rs          |  2 +-
+ compiler/rustc_target/src/callconv/m6809.rs   | 48 +++++++++++++++++++
+ compiler/rustc_target/src/callconv/mod.rs     |  2 +
+ compiler/rustc_target/src/spec/mod.rs         | 10 ++++
+ .../src/spec/targets/m6800_none_elf.rs        | 48 +++++++++++++++++++
+ .../src/spec/targets/m6809_none_elf.rs        | 48 +++++++++++++++++++
+ compiler/rustc_target/src/target_features.rs  | 11 ++++-
+ library/core/src/ffi/primitives.rs            |  7 ++-
+ 12 files changed, 193 insertions(+), 5 deletions(-)
+ create mode 100644 compiler/rustc_target/src/callconv/m6809.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/m6800_none_elf.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/m6809_none_elf.rs
+
+diff --git a/compiler/rustc_codegen_llvm/src/va_arg.rs b/compiler/rustc_codegen_llvm/src/va_arg.rs
+index c74ea60ac..d4c1fea95 100644
+--- a/compiler/rustc_codegen_llvm/src/va_arg.rs
++++ b/compiler/rustc_codegen_llvm/src/va_arg.rs
+@@ -1296,7 +1296,7 @@ pub(super) fn emit_va_arg<'ll, 'tcx>(
+         Arch::Bpf => bug!("bpf does not support c-variadic functions"),
+         Arch::SpirV => bug!("spirv does not support c-variadic functions"),
+ 
+-        Arch::Avr | Arch::M68k | Arch::Msp430 => {
++        Arch::Avr | Arch::M68k | Arch::M6800 | Arch::M6809 | Arch::Msp430 => {
+             std::assert_matches!(stability, CVariadicStatus::Unstable { .. });
+ 
+             // Clang uses the LLVM implementation for these architectures.
+diff --git a/compiler/rustc_llvm/build.rs b/compiler/rustc_llvm/build.rs
+index 450b98f20..4cb30805c 100644
+--- a/compiler/rustc_llvm/build.rs
++++ b/compiler/rustc_llvm/build.rs
+@@ -16,6 +16,8 @@
+     "avr",
+     "loongarch",
+     "m68k",
++    "m6800",
++    "m6809",
+     "csky",
+     "mips",
+     "powerpc",
+diff --git a/compiler/rustc_llvm/src/lib.rs b/compiler/rustc_llvm/src/lib.rs
+index a565e1fee..50cb1103e 100644
+--- a/compiler/rustc_llvm/src/lib.rs
++++ b/compiler/rustc_llvm/src/lib.rs
+@@ -135,6 +135,22 @@ fn init() { }
+         LLVMInitializeM68kAsmPrinter,
+         LLVMInitializeM68kAsmParser
+     );
++    init_target!(
++        llvm_component = "m6800",
++        LLVMInitializeM6800TargetInfo,
++        LLVMInitializeM6800Target,
++        LLVMInitializeM6800TargetMC,
++        LLVMInitializeM6800AsmPrinter,
++        LLVMInitializeM6800AsmParser
++    );
++    init_target!(
++        llvm_component = "m6809",
++        LLVMInitializeM6809TargetInfo,
++        LLVMInitializeM6809Target,
++        LLVMInitializeM6809TargetMC,
++        LLVMInitializeM6809AsmPrinter,
++        LLVMInitializeM6809AsmParser
++    );
+     init_target!(
+         llvm_component = "csky",
+         LLVMInitializeCSKYTargetInfo,
+diff --git a/compiler/rustc_span/src/symbol.rs b/compiler/rustc_span/src/symbol.rs
+index 89deeb44c..98a81641d 100644
+--- a/compiler/rustc_span/src/symbol.rs
++++ b/compiler/rustc_span/src/symbol.rs
+@@ -1270,6 +1270,8 @@
+         lr,
+         lsx,
+         lt,
++        m6800,
++        m6809,
+         m68k,
+         m68k_target_feature,
+         mac16,
+diff --git a/compiler/rustc_target/src/asm/mod.rs b/compiler/rustc_target/src/asm/mod.rs
+index 6f9751e80..8320fbce1 100644
+--- a/compiler/rustc_target/src/asm/mod.rs
++++ b/compiler/rustc_target/src/asm/mod.rs
+@@ -281,7 +281,7 @@ pub fn from_arch(arch: &Arch) -> Option<Self> {
+             Arch::M68k => Some(Self::M68k),
+             Arch::CSky => Some(Self::CSKY),
+             Arch::Xtensa => Some(Self::Xtensa),
+-            Arch::Other(_) => None,
++            Arch::M6800 | Arch::M6809 | Arch::Other(_) => None,
+         }
+     }
+ }
+diff --git a/compiler/rustc_target/src/callconv/m6809.rs b/compiler/rustc_target/src/callconv/m6809.rs
+new file mode 100644
+index 000000000..c6519b825
+--- /dev/null
++++ b/compiler/rustc_target/src/callconv/m6809.rs
+@@ -0,0 +1,48 @@
++// The C calling convention of the LLVM M6809 and M6800 backends, which
++// share it. Clang's M6809ABIInfo is the reference: aggregates are passed by
++// value in the argument area and returned through a hidden pointer, as
++// LLVM's default ABI does. Zero-sized arguments are already ignored.
++// Integers narrower than `int` (16 bits) are extended.
++
++use rustc_abi::TyAbiInterface;
++
++use crate::callconv::{ArgAbi, FnAbi};
++
++fn classify_ret<Ty>(ret: &mut ArgAbi<'_, Ty>) {
++    if ret.layout.is_aggregate() {
++        ret.make_indirect();
++    } else {
++        ret.extend_integer_width_to(16);
++    }
++}
++
++fn classify_arg<'a, Ty, C>(cx: &C, arg: &mut ArgAbi<'a, Ty>)
++where
++    Ty: TyAbiInterface<'a, C> + Copy,
++{
++    if arg.layout.pass_indirectly_in_non_rustic_abis(cx) {
++        arg.make_indirect();
++        return;
++    }
++    if arg.layout.is_aggregate() {
++        arg.pass_by_stack_offset(None);
++        return;
++    }
++    arg.extend_integer_width_to(16);
++}
++
++pub(crate) fn compute_abi_info<'a, Ty, C>(cx: &C, fn_abi: &mut FnAbi<'a, Ty>)
++where
++    Ty: TyAbiInterface<'a, C> + Copy,
++{
++    if !fn_abi.ret.is_ignore() {
++        classify_ret(&mut fn_abi.ret);
++    }
++
++    for arg in fn_abi.args.iter_mut() {
++        if arg.is_ignore() {
++            continue;
++        }
++        classify_arg(cx, arg);
++    }
++}
+diff --git a/compiler/rustc_target/src/callconv/mod.rs b/compiler/rustc_target/src/callconv/mod.rs
+index bb9dd8496..382b5d7de 100644
+--- a/compiler/rustc_target/src/callconv/mod.rs
++++ b/compiler/rustc_target/src/callconv/mod.rs
+@@ -19,6 +19,7 @@
+ mod hexagon;
+ mod loongarch;
+ mod m68k;
++mod m6809;
+ mod mips;
+ mod mips64;
+ mod msp430;
+@@ -761,6 +762,7 @@ pub fn adjust_for_foreign_abi<C>(&mut self, cx: &C, abi: ExternAbi)
+             Arch::PowerPC64 => powerpc64::compute_abi_info(cx, self),
+             Arch::S390x => s390x::compute_abi_info(cx, self),
+             Arch::Msp430 => msp430::compute_abi_info(cx, self),
++            Arch::M6800 | Arch::M6809 => m6809::compute_abi_info(cx, self),
+             Arch::Sparc => sparc::compute_abi_info(cx, self),
+             Arch::Sparc64 => sparc64::compute_abi_info(cx, self),
+             Arch::Nvptx64 => {
+diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+index ae17e37e2..36eb3fec3 100644
+--- a/compiler/rustc_target/src/spec/mod.rs
++++ b/compiler/rustc_target/src/spec/mod.rs
+@@ -1540,6 +1540,9 @@ fn $module() {
+ 
+     ("msp430-none-elf", msp430_none_elf),
+ 
++    ("m6800-none-elf", m6800_none_elf),
++    ("m6809-none-elf", m6809_none_elf),
++
+     ("aarch64_be-unknown-hermit", aarch64_be_unknown_hermit),
+     ("aarch64-unknown-hermit", aarch64_unknown_hermit),
+     ("riscv64gc-unknown-hermit", riscv64gc_unknown_hermit),
+@@ -1772,6 +1775,8 @@ pub enum Arch {
+         LoongArch32 = "loongarch32",
+         LoongArch64 = "loongarch64",
+         M68k = "m68k",
++        M6800 = "m6800",
++        M6809 = "m6809",
+         Mips = "mips",
+         Mips32r6 = "mips32r6",
+         Mips64 = "mips64",
+@@ -1809,6 +1814,8 @@ pub fn desc_symbol(&self) -> Symbol {
+             Self::LoongArch32 => sym::loongarch32,
+             Self::LoongArch64 => sym::loongarch64,
+             Self::M68k => sym::m68k,
++            Self::M6800 => sym::m6800,
++            Self::M6809 => sym::m6809,
+             Self::Mips => sym::mips,
+             Self::Mips32r6 => sym::mips32r6,
+             Self::Mips64 => sym::mips64,
+@@ -3089,7 +3096,10 @@ pub fn object_architecture(
+             Arch::LoongArch64 => (Architecture::LoongArch64, None),
+             Arch::CSky => (Architecture::Csky, None),
+             Arch::Arm64EC => (Architecture::Aarch64, Some(object::SubArchitecture::Arm64EC)),
++            // The object crate has no 6800 or 6809.
+             Arch::AmdGpu
++            | Arch::M6800
++            | Arch::M6809
+             | Arch::Nvptx64
+             | Arch::SpirV
+             | Arch::Wasm32
+diff --git a/compiler/rustc_target/src/spec/targets/m6800_none_elf.rs b/compiler/rustc_target/src/spec/targets/m6800_none_elf.rs
+new file mode 100644
+index 000000000..147070028
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/m6800_none_elf.rs
+@@ -0,0 +1,48 @@
++use crate::spec::{
++    Arch, Cc, Endian, LinkerFlavor, Lld, PanicStrategy, RelocModel, Target, TargetMetadata,
++    TargetOptions,
++};
++
++pub(crate) fn target() -> Target {
++    Target {
++        llvm_target: "m6800".into(),
++        metadata: TargetMetadata {
++            description: Some("Motorola 6800 family, for the Hitachi HD6301 (bare metal)".into()),
++            tier: Some(3),
++            host_tools: Some(false),
++            std: Some(false),
++        },
++        pointer_width: 16,
++        data_layout: "E-m:e-p:16:8-i16:8-i32:8-i64:8-f32:8-f64:8-a:8-n8:16-S8".into(),
++        arch: Arch::M6800,
++
++        options: TargetOptions {
++            c_int_width: 16,
++            cpu: "6301".into(),
++            endian: Endian::Big,
++
++            // Link with clang, whose bare-metal driver adds crt0, libc and
++            // the compiler-rt builtins, and runs ld.lld.
++            linker: Some("clang".into()),
++            linker_flavor: LinkerFlavor::Gnu(Cc::Yes, Lld::No),
++            pre_link_args: TargetOptions::link_args(
++                LinkerFlavor::Gnu(Cc::Yes, Lld::No),
++                &["--target=m6800"],
++            ),
++
++            // No atomic instructions, and one thread.
++            max_atomic_width: Some(0),
++            atomic_cas: false,
++
++            panic_strategy: PanicStrategy::Abort,
++            relocation_model: RelocModel::Static,
++            // There is no trap instruction; unreachable code calls abort.
++            trap_unreachable: false,
++            emit_debug_gdb_scripts: false,
++            eh_frame_header: false,
++            // One thread: fences need no instructions.
++            singlethread: true,
++            ..Default::default()
++        },
++    }
++}
+diff --git a/compiler/rustc_target/src/spec/targets/m6809_none_elf.rs b/compiler/rustc_target/src/spec/targets/m6809_none_elf.rs
+new file mode 100644
+index 000000000..28b557432
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/m6809_none_elf.rs
+@@ -0,0 +1,48 @@
++use crate::spec::{
++    Arch, Cc, Endian, LinkerFlavor, Lld, PanicStrategy, RelocModel, Target, TargetMetadata,
++    TargetOptions,
++};
++
++pub(crate) fn target() -> Target {
++    Target {
++        llvm_target: "m6809".into(),
++        metadata: TargetMetadata {
++            description: Some("Motorola 6809 and Hitachi HD6309 (bare metal)".into()),
++            tier: Some(3),
++            host_tools: Some(false),
++            std: Some(false),
++        },
++        pointer_width: 16,
++        data_layout: "E-m:e-p:16:8-i16:8-i32:8-i64:8-f32:8-f64:8-a:8-n8:16-S8".into(),
++        arch: Arch::M6809,
++
++        options: TargetOptions {
++            c_int_width: 16,
++            cpu: "6809".into(),
++            endian: Endian::Big,
++
++            // Link with clang, whose bare-metal driver adds crt0, libc and
++            // the compiler-rt builtins, and runs ld.lld.
++            linker: Some("clang".into()),
++            linker_flavor: LinkerFlavor::Gnu(Cc::Yes, Lld::No),
++            pre_link_args: TargetOptions::link_args(
++                LinkerFlavor::Gnu(Cc::Yes, Lld::No),
++                &["--target=m6809"],
++            ),
++
++            // No atomic instructions, and one thread.
++            max_atomic_width: Some(0),
++            atomic_cas: false,
++
++            panic_strategy: PanicStrategy::Abort,
++            relocation_model: RelocModel::Static,
++            // There is no trap instruction; unreachable code calls abort.
++            trap_unreachable: false,
++            emit_debug_gdb_scripts: false,
++            eh_frame_header: false,
++            // One thread: fences need no instructions.
++            singlethread: true,
++            ..Default::default()
++        },
++    }
++}
+diff --git a/compiler/rustc_target/src/target_features.rs b/compiler/rustc_target/src/target_features.rs
+index b209fe188..677dbe443 100644
+--- a/compiler/rustc_target/src/target_features.rs
++++ b/compiler/rustc_target/src/target_features.rs
+@@ -1200,7 +1200,12 @@ pub fn rust_target_features(&self) -> &'static [(&'static str, Stability, Implie
+             Arch::M68k => M68K_FEATURES,
+             Arch::Avr => AVR_FEATURES,
+             Arch::Xtensa => XTENSA_FEATURES,
+-            Arch::AmdGpu | Arch::Msp430 | Arch::SpirV | Arch::Other(_) => &[],
++            Arch::AmdGpu
++            | Arch::M6800
++            | Arch::M6809
++            | Arch::Msp430
++            | Arch::SpirV
++            | Arch::Other(_) => &[],
+         }
+     }
+ 
+@@ -1232,7 +1237,9 @@ pub fn features_for_correct_fixed_length_vector_abi(&self) -> &'static [(u64, &'
+                 MIPS_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI
+             }
+             Arch::AmdGpu => AMDGPU_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI,
+-            Arch::Nvptx64 | Arch::Bpf | Arch::M68k | Arch::Avr => &[], // no vector ABI
++            Arch::Nvptx64 | Arch::Bpf | Arch::M68k | Arch::Avr | Arch::M6800 | Arch::M6809 => {
++                &[] // no vector ABI
++            }
+             Arch::CSky => CSKY_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI,
+             // FIXME: for some tier3 targets, we are overly cautious and always give warnings
+             // when passing args in vector registers.
+diff --git a/library/core/src/ffi/primitives.rs b/library/core/src/ffi/primitives.rs
+index 11dad9a65..d27d6ffc9 100644
+--- a/library/core/src/ffi/primitives.rs
++++ b/library/core/src/ffi/primitives.rs
+@@ -176,7 +176,12 @@ mod c_long_definition {
+ 
+ mod c_int_definition {
+     crate::cfg_select! {
+-        any(target_arch = "avr", target_arch = "msp430") => {
++        any(
++            target_arch = "avr",
++            target_arch = "m6800",
++            target_arch = "m6809",
++            target_arch = "msp430"
++        ) => {
+             pub(super) type c_int = i16;
+             pub(super) type c_uint = u16;
+         }
+-- 
+2.51.2
+

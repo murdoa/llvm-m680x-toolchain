@@ -1,0 +1,57 @@
+From aee39313024c91d1274b2b1b998c1181705f9fa2 Mon Sep 17 00:00:00 2001
+From: murdoa <murdoa@protonmail.com>
+Date: Sun, 25 Oct 2026 16:39:45 +0000
+Subject: [PATCH] bootstrap: build for m6800 and m6809 before stage0 and cc
+ know them
+
+The two targets are missing from stage0, and cc 1.2.62 rejects their
+architecture. A copy of cc with both architectures added is patched in.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/bootstrap/Cargo.lock         | 2 --
+ src/bootstrap/Cargo.toml         | 4 ++++
+ src/bootstrap/src/core/sanity.rs | 2 ++
+ 3 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/bootstrap/Cargo.lock b/src/bootstrap/Cargo.lock
+index c5f9a4288..831f32b32 100644
+--- a/src/bootstrap/Cargo.lock
++++ b/src/bootstrap/Cargo.lock
+@@ -97,8 +97,6 @@ dependencies = [
+ [[package]]
+ name = "cc"
+ version = "1.2.62"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a1dce859f0832a7d088c4f1119888ab94ef4b5d6795d1ce05afb7fe159d79f98"
+ dependencies = [
+  "find-msvc-tools",
+  "shlex",
+diff --git a/src/bootstrap/Cargo.toml b/src/bootstrap/Cargo.toml
+index 4dcf87e32..03bc5e5c9 100644
+--- a/src/bootstrap/Cargo.toml
++++ b/src/bootstrap/Cargo.toml
+@@ -99,3 +99,7 @@ debug = 0
+ [profile.dev.package]
+ # Only use debuginfo=1 to further reduce compile times.
+ bootstrap.debug = 1
++
++# cc 1.2.62 with the m6800 and m6809 architectures.
++[patch.crates-io]
++cc = { path = "cc-patched" }
+diff --git a/src/bootstrap/src/core/sanity.rs b/src/bootstrap/src/core/sanity.rs
+index ac44a4dfc..587480edd 100644
+--- a/src/bootstrap/src/core/sanity.rs
++++ b/src/bootstrap/src/core/sanity.rs
+@@ -37,6 +37,8 @@ pub struct Finder {
+ const STAGE0_MISSING_TARGETS: &[&str] = &[
+     // just a dummy comment so the list doesn't get onelined
+     "aarch64-unknown-qtee",
++    "m6800-none-elf",
++    "m6809-none-elf",
+ ];
+ 
+ /// Minimum version threshold for libstdc++ required when using prebuilt LLVM
+-- 
+2.51.2
+

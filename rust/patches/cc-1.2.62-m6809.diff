@@ -1,0 +1,24 @@
+diff --color -ru a/src/target/generated.rs b/src/target/generated.rs
+--- a/src/target/generated.rs	2006-07-24 02:21:28.000000000 +0100
++++ b/src/target/generated.rs	2026-10-25 16:10:28.065917260 +0000
+@@ -148,6 +148,8 @@
+     ("loongarch64-unknown-linux-ohos", "loongarch64-unknown-linux-ohos"),
+     ("loongarch64-unknown-none", "loongarch64-unknown-none"),
+     ("loongarch64-unknown-none-softfloat", "loongarch64-unknown-none"),
++    ("m6800-none-elf", "m6800"),
++    ("m6809-none-elf", "m6809"),
+     ("m68k-unknown-linux-gnu", "m68k-unknown-linux-gnu"),
+     ("m68k-unknown-none-elf", "m68k"),
+     ("mips-mti-none-elf", "mips"),
+diff --color -ru a/src/target/parser.rs b/src/target/parser.rs
+--- a/src/target/parser.rs	2006-07-24 02:21:28.000000000 +0100
++++ b/src/target/parser.rs	2026-10-25 16:10:09.929916837 +0000
+@@ -186,6 +186,8 @@
+         "hexagon" => "hexagon",
+         "m68k" => "m68k",
+         "msp430" => "msp430",
++        "m6800" => "m6800",
++        "m6809" => "m6809",
+         "r600" => "r600",
+         "s390x" => "s390x",
+         "xtensa" => "xtensa",
