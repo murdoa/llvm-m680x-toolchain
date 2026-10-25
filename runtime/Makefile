@@ -26,7 +26,9 @@ SYSROOT := $(LLVM_BUILD)/lib/clang-runtimes/$(TARGET)
 # compiler-rt: the target's assembly, plus the generic C sources a 16-bit target
 # can use (no 128-bit types, no OS support).
 CRT_DIR := $(LLVM_SRC)/compiler-rt/lib/builtins
-CRT_ASM := mulhi3 divmodhi4 mulsi3 shiftsi3
+# The frame pointer word of functions with variable-sized objects.
+CRT_ASM_m6800 := fp
+CRT_ASM := mulhi3 divmodhi4 mulsi3 shiftsi3 $(CRT_ASM_$(TARGET))
 CRT_C := absvdi2 absvsi2 adddf3 addsf3 addvdi3 addvsi3 ashldi3 ashrdi3 \
   bswapdi2 bswapsi2 clzdi2 clzsi2 cmpdi2 comparedf2 comparesf2 ctzdi2 ctzsi2 \
   divdc3 divdf3 divdi3 divmoddi4 divmodsi4 divsc3 divsf3 divsi3 extendsfdf2 \
