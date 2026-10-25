@@ -33,7 +33,8 @@ if [ -z "${M6809_RUSTC:-}" ]; then
   done
 fi
 if [ -n "${M6809_RUSTC:-}" ]; then
-  export M6809_RUSTC
+  # Where m6809-rustc keeps the helper crates it builds with this rustc.
+  export M6809_RUSTC M6809_RUST_RT=$state/rust-rt
   languages+=(rust)
   echo "compiler-explorer-m6809: Rust from $M6809_RUSTC" >&2
 else

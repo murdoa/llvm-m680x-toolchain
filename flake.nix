@@ -135,10 +135,10 @@
               objdump = ceTool "m6809-objdump" "${m6809-toolchain}/bin/llvm-objdump";
               llc = ceTool "m6809-llc" "${m6809-toolchain}/bin/llc";
               cxxfilt = ceTool "m6809-cxxfilt" "${m6809-toolchain}/bin/llvm-cxxfilt";
-              # TODO: build rustc in nix. Until then this runs the rustc in
-              # $M6809_RUSTC, which the launcher points at the stage 1 build
-              # in third_party/rust.
-              rustc = ceTool "m6809-rustc" ''"''${M6809_RUSTC:?is not set}"'';
+              # TODO: build rustc in nix. See rustc.sh.
+              rustc = pkgs.writeShellScript "m6809-rustc"
+                (builtins.replaceStrings [ "@rt@" ] [ "${./nix/compiler-explorer/rust-rt}" ]
+                  (builtins.readFile ./nix/compiler-explorer/rustc.sh));
               rootDir = pkgs.runCommand "compiler-explorer-m6809-etc" { } ''
                 cp -r ${ce}/share/compiler-explorer/etc $out
                 chmod -R u+w $out
