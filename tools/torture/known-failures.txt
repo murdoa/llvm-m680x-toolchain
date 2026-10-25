@@ -1,0 +1,19 @@
+# c-torture/execute tests that fail for reasons other than a compiler bug.
+# One per line: test name, then the reason.
+
+# They assume int is wider than 16 bits.
+20071211-1 (1 << 24) overflows a 16-bit int
+20180131-1 (1 << 16) overflows a 16-bit int
+divmod-1 INT_MIN / -1 and (1 << 15) overflow a 16-bit int
+pr53645 vector_size(16) of 16-bit int has 8 lanes; lanes 4-7 divide by zero
+
+# Clang differs from GCC (these fail with clang on any target).
+20230630-2 needs scalar_storage_order, which clang does not support
+20230630-4 needs scalar_storage_order, which clang does not support
+990208-1 expects GCC to inline a function whose label address is taken; clang does not
+alias-1 relies on optimize("-fno-strict-aliasing"), which clang ignores; also sizeof(float) != sizeof(int)
+bitfld-3 GCC bit-field arithmetic in the field's width, fails with host clang
+bitfld-5 GCC bit-field arithmetic in the field's width, fails with host clang
+pr32244-1 GCC bit-field arithmetic in the field's width, fails with host clang
+pr34971 GCC bit-field arithmetic in the field's width, fails with host clang
+pr79043 relies on optimize("-fno-strict-aliasing"), which clang ignores; also sizeof(float) != sizeof(int)

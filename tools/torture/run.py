@@ -8,6 +8,10 @@ and run. A test passes when it exits with status 0. Tests that cannot apply
 to a 16-bit target without a hosted libc are skipped, by their dg- directives
 (int32plus, trampolines, ...) or because they do not fit in 64K.
 
+Tests listed in known-failures.txt fail for a reason other than a compiler
+bug (most assume a 32-bit int); they are reported as XFAIL, or XPASS if they
+pass after all.
+
 Results go to results-O<LEVEL>-<CPU>.txt next to this script (one line per test)
 and a summary is printed. TEST names a test (without .c) to run only those,
 and prints each result.
@@ -45,7 +49,7 @@ SKIP_PATTERNS = [
 # that change what the test means.
 KEEP_OPTION = re.compile(r'^(-D\S+|-U\S+|-std=\S+|-fwrapv|-fno-strict-aliasing|'
                          r'-f(un)?signed-char|-fno-builtin\S*|-fno-inline|'
-                         r'-ffast-math|-fno-math-errno)$')
+                         r'-ffast-math|-fno-math-errno|-finstrument-functions)$')
 
 BASE_FLAGS = ['--target=m6809', '-w', '-fno-color-diagnostics',
               '-Wno-error=implicit-function-declaration',
@@ -54,6 +58,21 @@ BASE_FLAGS = ['--target=m6809', '-w', '-fno-color-diagnostics',
               '-Wno-error=return-mismatch',
               '-Wno-error=incompatible-function-pointer-types']
 LINK_FLAGS = ['-T', 'm6809-sim.ld', '-lm6809sim']
+
+# For tests that size their data by the stack (dg-add-options stack_size).
+STACK_SIZE = 8192
+
+
+def known_failures():
+    """{test: reason} from known-failures.txt"""
+    known = {}
+    with open(os.path.join(HERE, 'known-failures.txt')) as f:
+        for line in f:
+            line = line.split('#', 1)[0].strip()
+            if line:
+                name, _, reason = line.partition(' ')
+                known[name] = reason.strip()
+    return known
 
 
 def directives(src):
@@ -67,6 +86,8 @@ def directives(src):
     opts = []
     for m in re.finditer(r'dg-(?:additional-)?options\s+"([^"]*)"', src):
         opts += [o for o in m.group(1).split() if KEEP_OPTION.match(o)]
+    if re.search(r'dg-add-options\s+stack_size', src):
+        opts.append(f'-DSTACK_SIZE={STACK_SIZE}')
     return None, opts
 
 
@@ -129,9 +150,14 @@ def main():
     names = a.tests or sorted(f[:-2] for f in os.listdir(TORTURE)
                               if f.endswith('.c'))
     work = [(n, a.opt, a.cpu, a.max) for n in names]
+    known = known_failures()
     results = []
     with multiprocessing.Pool(a.jobs) as pool:
         for i, res in enumerate(pool.imap_unordered(run_one, work), 1):
+            name, status, detail = res
+            if name in known and status != 'SKIP':
+                res = (name, 'XPASS' if status == 'PASS' else 'XFAIL',
+                       known[name] if status != 'PASS' else '')
             results.append(res)
             if a.tests:
                 print(f'{res[0]}: {res[1]} {res[2]}')
@@ -147,11 +173,12 @@ def main():
             for name, status, detail in results:
                 f.write(f'{name}\t{status}\t{detail}\n')
         print(f'wrote {out}')
-    applicable = len(results) - counts.get('SKIP', 0)
+    applicable = len(results) - counts.get('SKIP', 0) - counts.get('XFAIL', 0)
     print(' '.join(f'{k}={v}' for k, v in sorted(counts.items())))
+    passed = counts.get('PASS', 0) + counts.get('XPASS', 0)
     if applicable:
-        print(f'{counts.get("PASS", 0)}/{applicable} applicable tests pass '
-              f'({100 * counts.get("PASS", 0) / applicable:.1f}%)')
+        print(f'{passed}/{applicable} applicable tests pass '
+              f'({100 * passed / applicable:.1f}%)')
 
 
 if __name__ == '__main__':
