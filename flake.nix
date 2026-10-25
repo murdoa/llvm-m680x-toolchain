@@ -114,13 +114,23 @@
           compiler-explorer-m6809 =
             let
               ce = self.packages.${system}.compiler-explorer;
+              # CE's Intel-syntax filter adds an x86-only flag in binary
+              # mode, which llvm-objdump without the X86 target rejects.
+              objdump = pkgs.writeShellScript "m6809-objdump" ''
+                args=()
+                for a in "$@"; do
+                  [[ $a == --x86-asm-syntax=* ]] || args+=("$a")
+                done
+                exec ${m6809-toolchain}/bin/llvm-objdump "''${args[@]}"
+              '';
               rootDir = pkgs.runCommand "compiler-explorer-m6809-etc" { } ''
                 cp -r ${ce}/share/compiler-explorer/etc $out
                 chmod -R u+w $out
                 for f in ${./nix/compiler-explorer}/*.properties; do
                   substitute $f $out/config/$(basename $f) \
                     --replace-quiet @toolchain@ ${m6809-toolchain} \
-                    --replace-quiet @sim@ ${m6809-sim}
+                    --replace-quiet @sim@ ${m6809-sim} \
+                    --replace-quiet @objdump@ ${objdump}
                 done
               '';
             in pkgs.writeShellApplication {
