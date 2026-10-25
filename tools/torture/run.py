@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Run GCC's c-torture/execute tests on m6809-sim.
+"""Run GCC's c-torture/execute tests on m6809-sim or m6800-sim.
 
-usage: run.py [-O LEVEL] [-j JOBS] [--cpu CPU] [--sim-cpu CPU] [--max N] [TEST ...]
+usage: run.py [-O LEVEL] [-j JOBS] [--target T] [--cpu CPU] [--sim-cpu CPU]
+              [--max N] [TEST ...]
 
-Each test is compiled with clang --target=m6809, linked for the simulator
-and run. A test passes when it exits with status 0. Tests that cannot apply
+Each test is compiled with clang --target=m6809 (or m6800), linked for the
+simulator and run. A test passes when it exits with status 0. Tests that cannot apply
 to a 16-bit target without a hosted libc are skipped, by their dg- directives
 (int32plus, trampolines, ...) or because they do not fit in 64K.
 
@@ -28,7 +29,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 TORTURE = os.path.join(ROOT, 'third_party/gcc/gcc/testsuite/gcc.c-torture/execute')
 CLANG = os.path.join(ROOT, 'build/bin/clang')
-SIM = os.path.join(ROOT, 'tools/m6809-sim/m6809-sim')
+
+
+def sim_path(target):
+    return os.path.join(ROOT, f'tools/{target}-sim/{target}-sim')
+
 
 # Effective targets this toolchain does not have.
 MISSING_TARGETS = {
@@ -53,14 +58,18 @@ KEEP_OPTION = re.compile(r'^(-D\S+|-U\S+|-std=\S+|-fwrapv|-fno-strict-aliasing|'
                          r'-fgnu89-inline|-fno-common|-fno-strict-overflow|'
                          r'-fno-trapping-math)$')
 
-BASE_FLAGS = ['--target=m6809', '-w', '-fno-color-diagnostics',
+BASE_FLAGS = ['-w', '-fno-color-diagnostics',
               '-Wno-error=implicit-function-declaration',
               '-Wno-error=implicit-int', '-Wno-error=int-conversion',
               '-Wno-error=incompatible-pointer-types',
               '-Wno-error=return-mismatch',
               '-Wno-error=incompatible-function-pointer-types',
               '-Wno-error=parentheses']
-LINK_FLAGS = ['-T', 'm6809-sim.ld', '-lm6809sim']
+
+
+def link_flags(target):
+    return ['-T', f'{target}-sim.ld', f'-l{target}sim']
+
 
 # The stack size for tests that size their data by it (dg-add-options
 # stack_size), and the most a test may ask for (dg-require-stack-size): all
@@ -103,7 +112,7 @@ def directives(src):
 
 
 def run_one(args):
-    name, opt, cpu, sim_cpu, max_insns = args
+    name, target, opt, cpu, sim_cpu, max_insns = args
     path = os.path.join(TORTURE, name + '.c')
     with open(path, errors='replace') as f:
         src = f.read()
@@ -112,8 +121,9 @@ def run_one(args):
         return name, 'SKIP', skip
     with tempfile.TemporaryDirectory() as tmp:
         exe = os.path.join(tmp, 'a.elf')
-        cmd = [CLANG] + BASE_FLAGS + [f'-O{opt}', f'-mcpu={cpu}'] + extra + \
-            [path, '-o', exe] + LINK_FLAGS
+        cmd = [CLANG, f'--target={target}'] + BASE_FLAGS + \
+            [f'-O{opt}', f'-mcpu={cpu}'] + extra + \
+            [path, '-o', exe] + link_flags(target)
         try:
             r = subprocess.run(cmd, capture_output=True, text=True,
                                timeout=300, cwd=tmp)
@@ -145,7 +155,8 @@ def run_one(args):
             return name, 'COMPILE-ERROR', first.strip()[:200]
         try:
             sim_flags = ['-6309'] if sim_cpu == '6309' else []
-            r = subprocess.run([SIM, '-max', str(max_insns)] + sim_flags +
+            r = subprocess.run([sim_path(target), '-max', str(max_insns)] +
+                               sim_flags +
                                [exe],
                                capture_output=True, text=True,
                                errors='replace', timeout=600)
@@ -170,7 +181,8 @@ def main():
     ap.add_argument('-O', dest='opt', default='2')
     ap.add_argument('-j', dest='jobs', type=int,
                     default=multiprocessing.cpu_count())
-    ap.add_argument('--cpu', default='6809')
+    ap.add_argument('--target', default='m6809', choices=['m6809', 'm6800'])
+    ap.add_argument('--cpu', help='default: 6809 for m6809, 6301 for m6800')
     ap.add_argument('--sim-cpu', help='CPU to simulate (default: --cpu); '
                     '--cpu 6809 --sim-cpu 6309 checks that 6809 code runs '
                     'unchanged on an HD6309')
@@ -180,8 +192,9 @@ def main():
 
     names = a.tests or sorted(f[:-2] for f in os.listdir(TORTURE)
                               if f.endswith('.c'))
+    a.cpu = a.cpu or ('6809' if a.target == 'm6809' else '6301')
     sim_cpu = a.sim_cpu or a.cpu
-    work = [(n, a.opt, a.cpu, sim_cpu, a.max) for n in names]
+    work = [(n, a.target, a.opt, a.cpu, sim_cpu, a.max) for n in names]
     known = known_failures()
     results = []
     with multiprocessing.Pool(a.jobs) as pool:
