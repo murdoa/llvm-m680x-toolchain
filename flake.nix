@@ -31,7 +31,10 @@
           inherit (self.packages.${system}) llvm-m6809 m6809-toolchain m6809-sim;
         in {
           # clang, lld, llc, llvm-mc etc. with only the M6809 and M6800 targets.
-          llvm-m6809 = pkgs.stdenv.mkDerivation {
+          # Built with clang like configure.sh does. With GCC, LLVM turns off
+          # precompiled headers, which the backend relies on for a few
+          # missing #includes.
+          llvm-m6809 = pkgs.clangStdenv.mkDerivation {
             pname = "llvm-m6809";
             version = "unstable-${llvm-project.lastModifiedDate}";
             src = llvm-project;
