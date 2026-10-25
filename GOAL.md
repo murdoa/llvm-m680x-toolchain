@@ -52,10 +52,10 @@ Each item can be checked.
 | # | Milestone | Proves |
 |---|-----------|--------|
 | M0 | `llc` emits 6809 assembly for straight-line code | Backend skeleton works (**done**) |
-| M1 | Branches, calls, globals, shifts, mul/div libcalls, i32 | Real C functions compile |
-| M2 | Clang target, lwasm-compatible output, crt0, runtime, emulator test loop | C runs end to end |
-| M3 | c-torture passing for 6809 | Correctness |
-| M4 | MC encoder, ELF relocations, lld | No outside tools needed |
+| M1 | Branches, calls, globals, shifts, mul/div libcalls, i32 | Real C functions compile (**done**) |
+| M2 | Clang target, lwasm-compatible output, crt0, runtime, emulator test loop | C runs end to end (**done**) |
+| M3 | c-torture passing for 6809 | Correctness (**done**: every applicable test passes at -O0, -O2 and -Oz; the rest are skipped or listed in tools/torture/known-failures.txt) |
+| M4 | MC encoder, ELF relocations, lld | No outside tools needed (**done**) |
 | M5 | HD6309 subtarget | Extended CPU support |
 | M6 | M6800 backend for the HD6301 | Second backend |
 | M7 | Rust `core` on both backends | Rust |
