@@ -18,8 +18,11 @@
       forAllSystems = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" ];
     in {
       packages = forAllSystems (system:
-        let pkgs = nixpkgs.legacyPackages.${system}; in {
-          # llc, llvm-mc, opt etc. with only the M6809 and M6800 targets.
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          inherit (self.packages.${system}) llvm-m6809 m6809-toolchain m6809-sim;
+        in {
+          # clang, lld, llc, llvm-mc etc. with only the M6809 and M6800 targets.
           llvm-m6809 = pkgs.stdenv.mkDerivation {
             pname = "llvm-m6809";
             version = "unstable-${llvm-project.lastModifiedDate}";
@@ -33,16 +36,63 @@
               "-DLLVM_ENABLE_ASSERTIONS=ON"
               "-DLLVM_TARGETS_TO_BUILD="
               "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=M6809;M6800"
+              "-DLLVM_ENABLE_PROJECTS=clang;lld"
+              "-DCLANG_ENABLE_CIR=OFF"
               "-DLLVM_INCLUDE_BENCHMARKS=OFF"
               "-DLLVM_INCLUDE_EXAMPLES=OFF"
               "-DLLVM_INCLUDE_TESTS=OFF"
+              "-DCLANG_INCLUDE_TESTS=OFF"
               "-DLLVM_PARALLEL_LINK_JOBS=2"
             ];
 
-            meta.description = "LLVM tools with the experimental M6809 and M6800 backends";
+            meta.description = "LLVM, clang and lld with the experimental M6809 and M6800 backends";
           };
 
-          default = self.packages.${system}.llvm-m6809;
+          # llvm-m6809 plus the runtime (crt0, compiler-rt builtins, libc and
+          # the m6809-sim board library), so that `clang --target=m6809 x.c`
+          # links. clang finds the runtime relative to its own binary, so the
+          # tools are copied rather than symlinked.
+          m6809-toolchain = pkgs.stdenv.mkDerivation {
+            pname = "m6809-toolchain";
+            inherit (llvm-m6809) version;
+            src = ./runtime;
+
+            dontConfigure = true;
+
+            buildPhase = ''
+              runHook preBuild
+              mkdir -p $out/bin $out/lib
+              for t in clang clang++ clang-cpp ld.lld lld llc llvm-mc llvm-ar \
+                       llvm-ranlib llvm-objdump llvm-objcopy llvm-nm llvm-size \
+                       llvm-readelf llvm-cxxfilt; do
+                cp -P ${llvm-m6809}/bin/$t $out/bin/
+              done
+              # clang and friends are symlinks to clang-NN; copy that too.
+              cp ${llvm-m6809}/bin/clang-[0-9]* $out/bin/
+              cp -r ${llvm-m6809}/lib/clang $out/lib/
+              chmod -R u+w $out
+
+              make install LLVM_BUILD=$out LLVM_SRC=${llvm-project} \
+                -j$NIX_BUILD_CORES
+              runHook postBuild
+            '';
+
+            dontInstall = true;
+
+            meta.description = "clang toolchain and runtime for the M6809";
+          };
+
+          # The 6809 simulator the runtime tests and c-torture run on.
+          m6809-sim = pkgs.stdenv.mkDerivation {
+            pname = "m6809-sim";
+            version = "0";
+            src = ./tools/m6809-sim;
+            installPhase = "install -Dm755 m6809-sim -t $out/bin";
+            meta.description = "6809 simulator for running compiled test programs";
+            meta.mainProgram = "m6809-sim";
+          };
+
+          default = m6809-toolchain;
         });
 
       devShells = forAllSystems (system:
