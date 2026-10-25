@@ -40,7 +40,8 @@ pass, `M6800FrameAccess`, rewrites stack slots into that form.
 ## How it has been tested
 
 - **GCC c-torture execute.** Every applicable test passes in a cycle-level
-  simulator (in-tree tools, not part of this RFC). That is about 1,530
+  simulator (in-tree tools, not part of this RFC), with the machine
+  verifier on (`-verify-machineinstrs`). That is about 1,530
   tests per configuration: the 6809 and the HD6309 at `-O0`, `-O2` and
   `-Oz`, 6809 code run on an HD6309, and the HD6301 at `-O0`, `-O2` and
   `-Oz`. Not applicable means needing more than 64 KB, a hosted libc,
@@ -73,12 +74,14 @@ shared code and would be posted for review on their own:
   B could be "reassigned" to A while an i16 range took D.
 - `[RegAllocFast]` Allocate uses of single-register classes first.
 - `[CodeGen]` Let stack coloring share the slots of demoted call results.
+- `[CodeGen]` Keep a dead copy's def dead when the spiller folds it into a
+  reload.
 - `[SelectionDAG]` Check ADDE on the half type in expandMUL_LOHI; don't
   assert on inline asm values wider than their register class.
 - `[AtomicExpand]` Pass the memory order as a 16-bit int on 16-bit targets.
 
-The two RegAlloc fixes and the SelectionDAG ones are target-independent
-bugs, which these small register files expose.
+The two RegAlloc fixes, the folding fix and the SelectionDAG ones are
+target-independent bugs, which these small register files expose.
 
 ## Open questions
 
