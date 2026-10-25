@@ -9,6 +9,7 @@ extern "C" {
 #define RAND_MAX 0x7FFF
 typedef struct { int quot, rem; } div_t;
 typedef struct { long quot, rem; } ldiv_t;
+typedef struct { long long quot, rem; } lldiv_t;
 _Noreturn void abort(void);
 _Noreturn void exit(int status);
 _Noreturn void _exit(int status);
@@ -18,6 +19,7 @@ long labs(long x);
 long long llabs(long long x);
 div_t div(int n, int d);
 ldiv_t ldiv(long n, long d);
+lldiv_t lldiv(long long n, long long d);
 void *malloc(size_t n);
 void *calloc(size_t n, size_t size);
 void *realloc(void *p, size_t n);
