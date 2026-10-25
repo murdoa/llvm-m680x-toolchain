@@ -12,9 +12,10 @@ build, and code links with clang against the C runtime in `runtime/`.
 | atomics | none (single-threaded) | none (single-threaded) |
 | panics | abort | abort |
 
-The C calling convention is clang's for these targets: aggregates are
-passed by value on the stack and returned through a hidden pointer, and
-integers narrower than 16 bits are extended.
+The C calling convention is clang's for these targets (see the ABI section
+of `llvm-project/llvm/lib/Target/M6809/README.md`): aggregates are passed by
+value on the stack and returned through a hidden pointer, and small integers
+carry the same sign and zero extension attributes as in C.
 
 ## Building
 
