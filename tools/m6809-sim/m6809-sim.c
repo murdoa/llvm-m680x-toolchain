@@ -12,6 +12,8 @@
 //   SWI                    exit status 134 (abort)
 //   undefined instruction  exit status 132
 //   instruction limit      exit status 124
+//   stack overflow         exit status 135: S went below __heap_start, the
+//                          end of the program's data (ELF files only)
 //
 // The cycle counts are the datasheet base cycles plus the indexed-mode
 // extras. They are used for comparing code, not for timing peripherals.
@@ -33,7 +35,8 @@ enum { CC_C = 0x01, CC_V = 0x02, CC_Z = 0x04, CC_N = 0x08,
 enum { PORT_PUTCHAR = 0xFF00, PORT_EXIT = 0xFF01, PORT_GETCHAR = 0xFF02 };
 
 enum { STOP_NONE = -1, STOP_ABORT = 134, STOP_ILLEGAL = 132,
-       STOP_TIMEOUT = 124, STOP_DIVZERO = 133 };
+       STOP_TIMEOUT = 124, STOP_DIVZERO = 133,
+       STOP_STACK = 135 };
 
 typedef struct {
   uint8_t a, b, dp, cc;
@@ -1256,6 +1259,30 @@ static uint16_t load_elf(CPU *c, const uint8_t *e, size_t len) {
   return (uint16_t)be32(e + 24);
 }
 
+// The value of symbol NAME in the ELF symbol table, or -1.
+static long elf_symbol(const uint8_t *e, size_t len, const char *name) {
+  uint32_t shoff = be32(e + 32);
+  uint16_t shentsize = be16(e + 46), shnum = be16(e + 48);
+  if (!shoff || shoff + (size_t)shnum * shentsize > len)
+    return -1;
+  for (unsigned i = 0; i < shnum; i++) {
+    const uint8_t *sh = e + shoff + (size_t)i * shentsize;
+    if (be32(sh + 4) != 2) continue; // SHT_SYMTAB
+    uint32_t off = be32(sh + 16), size = be32(sh + 20), link = be32(sh + 24);
+    if (link >= shnum || off + size > len) return -1;
+    const uint8_t *str = e + shoff + (size_t)link * shentsize;
+    uint32_t stroff = be32(str + 16), strsize = be32(str + 20);
+    if (stroff + strsize > len) return -1;
+    for (uint32_t j = 0; j + 16 <= size; j += 16) {
+      uint32_t n = be32(e + off + j);
+      if (n < strsize &&
+          !strncmp((const char *)e + stroff + n, name, strsize - n))
+        return (long)be32(e + off + j + 4);
+    }
+  }
+  return -1;
+}
+
 static void usage(void) {
   fprintf(stderr,
           "usage: m6809-sim [options] program\n"
@@ -1278,6 +1305,7 @@ int main(int argc, char **argv) {
   long load = -1, entry = -1;
   uint64_t max = 100000000;
   int stats = 0, dump = 0;
+  long stack_limit = -1;
 
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "-load") && i + 1 < argc)
@@ -1316,6 +1344,7 @@ int main(int argc, char **argv) {
     start = (uint16_t)load;
   } else {
     start = load_elf(c, data, len);
+    stack_limit = elf_symbol(data, len, "__heap_start");
   }
   free(data);
 
@@ -1332,6 +1361,11 @@ int main(int argc, char **argv) {
       break;
     }
     step(c);
+    if (c->s < stack_limit && c->stop == STOP_NONE) {
+      fprintf(stderr, "m6809-sim: stack overflow at %04X (S=%04X)\n",
+              c->op_pc, c->s);
+      c->stop = STOP_STACK;
+    }
   }
   if (dump) {
     // FNV-1a over all of memory.

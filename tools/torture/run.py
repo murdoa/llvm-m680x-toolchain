@@ -155,6 +155,10 @@ def run_one(args):
             return name, 'PASS', ''
         if r.returncode == 124:
             return name, 'TIMEOUT', 'instruction limit'
+        # The stack ran into the program's data: code, data and stack
+        # together need more than 64K.
+        if r.returncode == 135:
+            return name, 'SKIP', 'does not fit in 64K (stack)'
         detail = {134: 'abort', 132: 'undefined instruction',
               133: 'division by zero'}.get(
             r.returncode, f'exit {r.returncode}')
