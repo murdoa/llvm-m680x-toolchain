@@ -1294,7 +1294,8 @@ static void usage(void) {
           "  -stats        print instruction and cycle counts on stderr\n"
           "  -noports      plain machine: no test ports, SWI is an interrupt\n"
           "  -dump         print the final registers and a memory checksum\n"
-          "  -6309         run as an HD6309 in emulation mode\n");
+          "  -6309         run as an HD6309 in emulation mode\n"
+          "  -profile FILE write the cycles spent at each address to FILE\n");
   exit(2);
 }
 
@@ -1306,6 +1307,8 @@ int main(int argc, char **argv) {
   uint64_t max = 100000000;
   int stats = 0, dump = 0;
   long stack_limit = -1;
+  const char *profile = NULL;
+  static uint64_t prof[0x10000];
 
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "-load") && i + 1 < argc)
@@ -1324,6 +1327,8 @@ int main(int argc, char **argv) {
       dump = 1;
     else if (!strcmp(argv[i], "-6309"))
       c->h6309 = 1;
+    else if (!strcmp(argv[i], "-profile") && i + 1 < argc)
+      profile = argv[++i];
     else if (argv[i][0] == '-' || path)
       usage();
     else
@@ -1360,7 +1365,10 @@ int main(int argc, char **argv) {
       c->stop = STOP_TIMEOUT;
       break;
     }
+    uint16_t at = c->pc;
+    uint64_t before = c->cycles;
     step(c);
+    prof[at] += c->cycles - before;
     if (c->s < stack_limit && c->stop == STOP_NONE) {
       fprintf(stderr, "m6809-sim: stack overflow at %04X (S=%04X)\n",
               c->op_pc, c->s);
@@ -1380,6 +1388,18 @@ int main(int argc, char **argv) {
     printf("\n");
   }
   fflush(stdout);
+  if (profile) {
+    // One line per address that took any cycles: "ADDR cycles", hex address.
+    FILE *f = fopen(profile, "w");
+    if (!f) {
+      perror(profile);
+      return 2;
+    }
+    for (unsigned i = 0; i < 0x10000; i++)
+      if (prof[i])
+        fprintf(f, "%04X %llu\n", i, (unsigned long long)prof[i]);
+    fclose(f);
+  }
   if (stats)
     fprintf(stderr, "m6809-sim: %llu instructions, %llu cycles\n",
             (unsigned long long)c->insns, (unsigned long long)c->cycles);
