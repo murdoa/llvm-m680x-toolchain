@@ -36,8 +36,12 @@ CRT_C := absvdi2 absvsi2 adddf3 addsf3 addvdi3 addvsi3 ashldi3 ashrdi3 \
   udivsi3 umoddi3 umodsi3
 CRT_OBJS := $(CRT_ASM:%=$(OUT)/crt/m6809_%.o) $(CRT_C:%=$(OUT)/crt/%.o)
 
-LIBC_SRCS := string stdlib malloc ctype stdio
-LIBC_OBJS := $(LIBC_SRCS:%=$(OUT)/libc/%.o)
+# One function (or a few that belong together) per file, so that a program
+# defining its own memcpy or abs does not clash with the archive's copy.
+LIBC_SRCS := $(wildcard libc/*.c libc/*/*.c)
+LIBC_ASM := $(wildcard libc/*/*.S)
+LIBC_OBJS := $(LIBC_SRCS:libc/%.c=$(OUT)/libc/%.o) \
+  $(LIBC_ASM:libc/%.S=$(OUT)/libc/%.o)
 
 all: $(OUT)/crt0.o $(OUT)/libclang_rt.builtins.a $(OUT)/libc.a \
   $(OUT)/libm6809sim.a
@@ -61,6 +65,10 @@ $(OUT)/libclang_rt.builtins.a: $(CRT_OBJS)
 $(OUT)/libc/%.o: libc/%.c $(wildcard libc/include/*.h)
 	@mkdir -p $(@D)
 	$(CC) $(LIBC_CFLAGS) -c $< -o $@
+
+$(OUT)/libc/%.o: libc/%.S
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OUT)/libc.a: $(LIBC_OBJS)
 	rm -f $@
