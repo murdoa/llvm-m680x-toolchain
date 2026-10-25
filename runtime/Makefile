@@ -110,6 +110,7 @@ install: all
 	  $(SYSROOT)/lib/
 	cp libc/include/*.h $(SYSROOT)/include/
 	cp $(OUT)/libclang_rt.builtins.a $(RESOURCE_DIR)/lib/$(TARGET)/
+	cp sim/$(TARGET)-sim.cfg $(LLVM_BUILD)/bin/
 
 # Each test prints its result and exits 0 when it passes.
 SIM := $(abspath ../tools/$(TARGET)-sim/$(TARGET)-sim)
