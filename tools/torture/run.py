@@ -49,7 +49,9 @@ SKIP_PATTERNS = [
 # that change what the test means.
 KEEP_OPTION = re.compile(r'^(-D\S+|-U\S+|-std=\S+|-fwrapv|-fno-strict-aliasing|'
                          r'-f(un)?signed-char|-fno-builtin\S*|-fno-inline|'
-                         r'-ffast-math|-fno-math-errno|-finstrument-functions)$')
+                         r'-ffast-math|-fno-math-errno|-finstrument-functions|'
+                         r'-fgnu89-inline|-fno-common|-fno-strict-overflow|'
+                         r'-fno-trapping-math)$')
 
 BASE_FLAGS = ['--target=m6809', '-w', '-fno-color-diagnostics',
               '-Wno-error=implicit-function-declaration',
