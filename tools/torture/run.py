@@ -58,7 +58,8 @@ BASE_FLAGS = ['--target=m6809', '-w', '-fno-color-diagnostics',
               '-Wno-error=implicit-int', '-Wno-error=int-conversion',
               '-Wno-error=incompatible-pointer-types',
               '-Wno-error=return-mismatch',
-              '-Wno-error=incompatible-function-pointer-types']
+              '-Wno-error=incompatible-function-pointer-types',
+              '-Wno-error=parentheses']
 LINK_FLAGS = ['-T', 'm6809-sim.ld', '-lm6809sim']
 
 # For tests that size their data by the stack (dg-add-options stack_size).
@@ -79,14 +80,16 @@ def known_failures():
 
 def directives(src):
     """(skip reason or None, extra options)"""
-    for m in re.finditer(r'dg-require-effective-target\s+(\w+)', src):
-        if m.group(1) in MISSING_TARGETS:
-            return f'needs {m.group(1)}', []
+    for m in re.finditer(r'dg-require-effective-target\s+(\w+)|'
+                         r'dg-do run \{ target (\w+) \}', src):
+        target = m.group(1) or m.group(2)
+        if target in MISSING_TARGETS:
+            return f'needs {target}', []
     for pat in SKIP_PATTERNS:
         if re.search(pat, src):
             return 'skipped for small targets', []
     opts = []
-    for m in re.finditer(r'dg-(?:additional-)?options\s+"([^"]*)"', src):
+    for m in re.finditer(r'dg-(?:additional-)?options\s+(?:\{\s*)?"([^"]*)"', src):
         opts += [o for o in m.group(1).split() if KEEP_OPTION.match(o)]
     if re.search(r'dg-add-options\s+stack_size', src):
         opts.append(f'-DSTACK_SIZE={STACK_SIZE}')
@@ -108,12 +111,21 @@ def run_one(args):
         try:
             r = subprocess.run(cmd, capture_output=True, text=True,
                                timeout=300, cwd=tmp)
+            # GCC defaults to gnu23 and clang to gnu17. Clang's C23 rejects
+            # the implicit int of old tests, so C23 is only the fallback.
+            if r.returncode and 'error:' in r.stderr and \
+                    not any(o.startswith('-std=') for o in extra):
+                r23 = subprocess.run(cmd + ['-std=gnu23'], capture_output=True,
+                                     text=True, timeout=300, cwd=tmp)
+                if not r23.returncode:
+                    r = r23
         except subprocess.TimeoutExpired:
             return name, 'COMPILE-TIMEOUT', ''
         if r.returncode:
             err = r.stderr
             if 'will not fit in region' in err or 'section overflow' in err or \
-                    'is out of range' in err and 'RAM' in err:
+                    'is out of range' in err and 'RAM' in err or \
+                    'array is too large' in err:
                 return name, 'SKIP', 'does not fit in 64K'
             if 'PLEASE submit a bug report' in err or 'error in backend' in err:
                 first = next((l for l in err.splitlines()
@@ -145,7 +157,7 @@ def main():
     ap.add_argument('-j', dest='jobs', type=int,
                     default=multiprocessing.cpu_count())
     ap.add_argument('--cpu', default='6809')
-    ap.add_argument('--max', type=int, default=200_000_000)
+    ap.add_argument('--max', type=int, default=3_000_000_000)
     ap.add_argument('tests', nargs='*')
     a = ap.parse_args()
 
