@@ -62,8 +62,11 @@ BASE_FLAGS = ['--target=m6809', '-w', '-fno-color-diagnostics',
               '-Wno-error=parentheses']
 LINK_FLAGS = ['-T', 'm6809-sim.ld', '-lm6809sim']
 
-# For tests that size their data by the stack (dg-add-options stack_size).
+# The stack size for tests that size their data by it (dg-add-options
+# stack_size), and the most a test may ask for (dg-require-stack-size): all
+# of the simulator's RAM, 0x100 to 0xFEFF.
 STACK_SIZE = 8192
+MAX_STACK = 0xFE00
 
 
 def known_failures():
@@ -85,6 +88,9 @@ def directives(src):
         target = m.group(1) or m.group(2)
         if target in MISSING_TARGETS:
             return f'needs {target}', []
+    m = re.search(r'dg-require-stack-size "([0-9x*+ ]+)"', src)
+    if m and eval(m.group(1)) > MAX_STACK:
+        return f'needs {eval(m.group(1))} bytes of stack', []
     for pat in SKIP_PATTERNS:
         if re.search(pat, src):
             return 'skipped for small targets', []
