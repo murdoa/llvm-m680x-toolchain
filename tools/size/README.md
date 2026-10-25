@@ -16,6 +16,6 @@ are written so CMOC accepts them too (it rejects some implicit narrowing).
 
 ## Status
 
-At `-Oz` the clang total is 2362 bytes against 2377 for CMOC 0.1.100
-(ratio 0.99). The biggest gaps left are `isqrt32` (32-bit locals that
-CMOC keeps in memory) and `rotl` (variable shifts).
+At `-Oz` the clang total is 2323 bytes against 2377 for CMOC 0.1.100
+(ratio 0.98). The biggest gap left is `isqrt32` (32-bit locals that
+CMOC keeps in memory).
