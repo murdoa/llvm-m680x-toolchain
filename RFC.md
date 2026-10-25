@@ -24,7 +24,7 @@ The code is at https://github.com/murdoa/llvm-project, branch `m6809`.
 | | M6809 | M6800 |
 |---|---|---|
 | Backend | about 9,200 lines, 54 files | about 7,600 lines, 50 files |
-| lit tests | 67 (CodeGen, MC) plus LoopUnroll | 48 (CodeGen, MC) |
+| lit tests | 67 (CodeGen, MC) plus LoopUnroll | 50 (CodeGen, MC) |
 | MC | encoder, ELF relocations, asm parser, disassembler | encoder, ELF relocations, asm parser, branch relaxation; no disassembler yet |
 | clang | target, ABI, driver (bare metal) | target, ABI, driver (bare metal) |
 | lld | ELF/M6809 | ELF/M6800 |
