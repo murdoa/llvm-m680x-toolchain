@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure an LLVM build with the experimental M6809 target.
+# Configure an LLVM build with the experimental M6809 and M6800 targets.
 # Run inside `nix develop`. Re-run after adding new targets.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -8,7 +8,7 @@ cmake -S llvm-project/llvm -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DLLVM_ENABLE_ASSERTIONS=ON \
   -DLLVM_TARGETS_TO_BUILD="${HOST_TARGETS:-}" \
-  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="${TARGETS-M6809}" \
+  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="${TARGETS-M6809;M6800}" \
   -DLLVM_ENABLE_PROJECTS="${PROJECTS-clang;lld}" \
   -DCLANG_ENABLE_CIR=OFF \
   -DCMAKE_C_COMPILER=clang \
