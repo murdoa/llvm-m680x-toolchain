@@ -24,6 +24,7 @@ simulator, and `make -C runtime install`.
 ```sh
 tools/torture/run.py -O2            # all tests, results in results-O2-6809.txt
 tools/torture/run.py -O0 pr12345    # one test
+tools/torture/run.py -O2 --verify   # also run the machine verifier
 ```
 
 A test is applicable when it fits in 64K and needs nothing a 16-bit target

@@ -191,6 +191,9 @@ def main():
                     '--cpu 6809 --sim-cpu 6309 checks that 6809 code runs '
                     'unchanged on an HD6309')
     ap.add_argument('--max', type=int, default=3_000_000_000)
+    ap.add_argument('--verify', action='store_true',
+                    help='also run the machine verifier; its errors count '
+                    'as ICEs, and no results file is written')
     ap.add_argument('tests', nargs='*')
     a = ap.parse_args()
 
@@ -198,6 +201,8 @@ def main():
                               if f.endswith('.c'))
     a.cpu = a.cpu or ('6809' if a.target == 'm6809' else '6301')
     sim_cpu = a.sim_cpu or a.cpu
+    if a.verify:
+        BASE_FLAGS.extend(['-mllvm', '-verify-machineinstrs'])
     work = [(n, a.target, a.opt, a.cpu, sim_cpu, a.max) for n in names]
     known = known_failures(a.target)
     results = []
@@ -208,7 +213,7 @@ def main():
                 res = (name, 'XPASS' if status == 'PASS' else 'XFAIL',
                        known[name] if status != 'PASS' else '')
             results.append(res)
-            if a.tests:
+            if a.tests or a.verify and res[1] == 'ICE':
                 print(f'{res[0]}: {res[1]} {res[2]}')
             elif i % 100 == 0:
                 print(f'{i}/{len(work)}', file=sys.stderr)
@@ -216,7 +221,7 @@ def main():
     counts = {}
     for _, status, _ in results:
         counts[status] = counts.get(status, 0) + 1
-    if not a.tests:
+    if not a.tests and not a.verify:
         out = os.path.join(HERE, f'results-O{a.opt}-{a.cpu}' +
                            (f'-on-{sim_cpu}' if sim_cpu != a.cpu else '') +
                            '.txt')
