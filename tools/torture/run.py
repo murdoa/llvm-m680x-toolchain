@@ -9,9 +9,9 @@ simulator and run. A test passes when it exits with status 0. Tests that cannot 
 to a 16-bit target without a hosted libc are skipped, by their dg- directives
 (int32plus, trampolines, ...) or because they do not fit in 64K.
 
-Tests listed in known-failures.txt fail for a reason other than a compiler
-bug (most assume a 32-bit int); they are reported as XFAIL, or XPASS if they
-pass after all.
+Tests listed in known-failures.txt (and known-failures-TARGET.txt) fail for a
+reason other than a compiler bug (most assume a 32-bit int); they are reported
+as XFAIL, or XPASS if they pass after all.
 
 Results go to results-O<LEVEL>-<CPU>.txt next to this script (one line per test)
 and a summary is printed. TEST names a test (without .c) to run only those,
@@ -78,15 +78,19 @@ STACK_SIZE = 8192
 MAX_STACK = 0xFE00
 
 
-def known_failures():
-    """{test: reason} from known-failures.txt"""
+def known_failures(target):
+    """{test: reason} from known-failures.txt and known-failures-TARGET.txt"""
     known = {}
-    with open(os.path.join(HERE, 'known-failures.txt')) as f:
-        for line in f:
-            line = line.split('#', 1)[0].strip()
-            if line:
-                name, _, reason = line.partition(' ')
-                known[name] = reason.strip()
+    for file in ['known-failures.txt', f'known-failures-{target}.txt']:
+        path = os.path.join(HERE, file)
+        if not os.path.exists(path):
+            continue
+        with open(path) as f:
+            for line in f:
+                line = line.split('#', 1)[0].strip()
+                if line:
+                    name, _, reason = line.partition(' ')
+                    known[name] = reason.strip()
     return known
 
 
@@ -195,7 +199,7 @@ def main():
     a.cpu = a.cpu or ('6809' if a.target == 'm6809' else '6301')
     sim_cpu = a.sim_cpu or a.cpu
     work = [(n, a.target, a.opt, a.cpu, sim_cpu, a.max) for n in names]
-    known = known_failures()
+    known = known_failures(a.target)
     results = []
     with multiprocessing.Pool(a.jobs) as pool:
         for i, res in enumerate(pool.imap_unordered(run_one, work), 1):

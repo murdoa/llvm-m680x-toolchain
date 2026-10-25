@@ -1,0 +1,6 @@
+# c-torture/execute tests that cannot work on the 6800, on top of
+# known-failures.txt. Same format.
+
+# The 6800 has two 16-bit registers, D and X.
+20030222-1 asm with a long long in "r": needs four 16-bit registers
+pr41239 asm with three "r" operands at once
