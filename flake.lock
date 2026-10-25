@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "compiler-explorer": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792855264,
+        "narHash": "sha256-JcO6tMT51wWzBkaIxKY22g6+4isBpvYjsvh1EL4DBxA=",
+        "owner": "compiler-explorer",
+        "repo": "compiler-explorer",
+        "rev": "02855b7e2dcee52676787da3d0b28b5caa6fbb9a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "compiler-explorer",
+        "repo": "compiler-explorer",
+        "type": "github"
+      }
+    },
     "llvm-project": {
       "flake": false,
       "locked": {
@@ -35,6 +51,7 @@
     },
     "root": {
       "inputs": {
+        "compiler-explorer": "compiler-explorer",
         "llvm-project": "llvm-project",
         "nixpkgs": "nixpkgs"
       }

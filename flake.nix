@@ -11,9 +11,17 @@
       url = "github:murdoa/llvm-project/m6809";
       flake = false;
     };
+
+    # Compiler Explorer, run locally by `nix run .#compiler-explorer`.
+    # After `nix flake update compiler-explorer`, update npmDepsHash in
+    # nix/compiler-explorer/package.nix.
+    compiler-explorer = {
+      url = "github:compiler-explorer/compiler-explorer";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, llvm-project }:
+  outputs = { self, nixpkgs, llvm-project, compiler-explorer }:
     let
       forAllSystems = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" ];
     in {
@@ -92,8 +100,42 @@
             meta.mainProgram = "m6809-sim";
           };
 
+          compiler-explorer = pkgs.callPackage ./nix/compiler-explorer/package.nix {
+            src = compiler-explorer;
+          };
+
+          # Compiler Explorer with only the m6809 compilers configured.
+          # Extra arguments go to compiler-explorer, e.g. --port 8080.
+          compiler-explorer-m6809 =
+            let
+              ce = self.packages.${system}.compiler-explorer;
+              rootDir = pkgs.runCommand "compiler-explorer-m6809-etc" { } ''
+                cp -r ${ce}/share/compiler-explorer/etc $out
+                chmod -R u+w $out
+                for f in ${./nix/compiler-explorer}/*.properties; do
+                  substitute $f $out/config/$(basename $f) \
+                    --replace-quiet @toolchain@ ${m6809-toolchain} \
+                    --replace-quiet @sim@ ${m6809-sim}
+                done
+              '';
+            in pkgs.writeShellApplication {
+              name = "compiler-explorer-m6809";
+              runtimeInputs = [ pkgs.coreutils pkgs.findutils ];
+              text = builtins.replaceStrings [ "@ce@" "@etc@" ]
+                [ (pkgs.lib.getExe ce) "${rootDir}" ]
+                (builtins.readFile ./nix/compiler-explorer/wrapper.sh);
+            };
+
           default = m6809-toolchain;
         });
+
+      apps = forAllSystems (system: {
+        # nix run .#compiler-explorer, then open http://localhost:10240
+        compiler-explorer = {
+          type = "app";
+          program = nixpkgs.lib.getExe self.packages.${system}.compiler-explorer-m6809;
+        };
+      });
 
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in {

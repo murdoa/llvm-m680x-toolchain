@@ -9,3 +9,4 @@ tools/torture/results-*.txt
 tools/m6809-sim/test6309.bin
 build-rust/
 build-rust-stage1.log
+result-*
