@@ -19,6 +19,7 @@ OUT := out/$(TARGET)
 
 CFLAGS := --target=$(TARGET) -O2 -ffreestanding -Wall -Werror
 LIBC_CFLAGS := $(CFLAGS) -fno-builtin -Ilibc/include
+LIBC_CXXFLAGS := $(LIBC_CFLAGS) -fno-exceptions -fno-rtti
 
 RESOURCE_DIR := $(shell $(CC) --target=$(TARGET) -print-resource-dir)
 SYSROOT := $(LLVM_BUILD)/lib/clang-runtimes/$(TARGET)
@@ -45,9 +46,12 @@ CRT_OBJS := $(CRT_ASM:%=$(OUT)/crt/$(TARGET)_%.o) $(CRT_C:%=$(OUT)/crt/%.o)
 # One function (or a few that belong together) per file, so that a program
 # defining its own memcpy or abs does not clash with the archive's copy.
 LIBC_SRCS := $(wildcard libc/*.c libc/*/*.c)
+# The C++ ABI support and operator new/delete.
+LIBC_CXX_SRCS := $(wildcard libc/cxx/*.cpp)
 # The target's own parts of libc (setjmp), next to its crt0.
 LIBC_ASM := $(filter-out arch/$(TARGET)/crt0.S,$(wildcard arch/$(TARGET)/*.S))
 LIBC_OBJS := $(LIBC_SRCS:libc/%.c=$(OUT)/libc/%.o) \
+  $(LIBC_CXX_SRCS:libc/%.cpp=$(OUT)/libc/%.o) \
   $(LIBC_ASM:arch/$(TARGET)/%.S=$(OUT)/libc/%.o)
 
 all: $(OUT)/crt0.o $(OUT)/libclang_rt.builtins.a $(OUT)/libc.a \
@@ -72,6 +76,10 @@ $(OUT)/libclang_rt.builtins.a: $(CRT_OBJS)
 $(OUT)/libc/%.o: libc/%.c $(wildcard libc/include/*.h)
 	@mkdir -p $(@D)
 	$(CC) $(LIBC_CFLAGS) -c $< -o $@
+
+$(OUT)/libc/%.o: libc/%.cpp $(wildcard libc/include/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(LIBC_CXXFLAGS) -c $< -o $@
 
 $(OUT)/libc/%.o: arch/$(TARGET)/%.S
 	@mkdir -p $(@D)
@@ -105,12 +113,12 @@ install: all
 
 # Each test prints its result and exits 0 when it passes.
 SIM := $(abspath ../tools/$(TARGET)-sim/$(TARGET)-sim)
-TESTS := $(basename $(notdir $(wildcard tests/*.c)))
+TESTS := $(notdir $(wildcard tests/*.c tests/*.cpp))
 
 check: install
 	@fail=0; for t in $(TESTS); do \
-	  $(CC) --target=$(TARGET) -O2 tests/$$t.c -T $(TARGET)-sim.ld \
-	    -l$(TARGET)sim \
+	  $(CC) --target=$(TARGET) -O2 -fno-exceptions -fno-rtti tests/$$t \
+	    -T $(TARGET)-sim.ld -l$(TARGET)sim \
 	    -o $(OUT)/$$t.elf || { fail=1; continue; }; \
 	  if $(SIM) -max 500000000 $(OUT)/$$t.elf; then :; else \
 	    echo "$$t: exit $$?"; fail=1; fi; \
