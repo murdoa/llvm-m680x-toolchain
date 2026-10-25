@@ -856,6 +856,7 @@ int main(int argc, char **argv) {
 
   c->pc = entry >= 0 ? (uint16_t)entry : start;
   c->cc = CC_I | CC_F;
+  c->s = 0xFF00; // below the ports, until the program sets its own
   c->stop = STOP_NONE;
   while (c->stop == STOP_NONE) {
     if (c->insns >= max) {
