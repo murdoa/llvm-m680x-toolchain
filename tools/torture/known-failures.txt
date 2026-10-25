@@ -18,6 +18,7 @@ pr32244-1 GCC bit-field arithmetic in the field's width, fails with host clang
 pr34971 GCC bit-field arithmetic in the field's width, fails with host clang
 pr79043 relies on optimize("-fno-strict-aliasing"), which clang ignores; also sizeof(float) != sizeof(int)
 pr79286 passes an uninitialized variable to printf; clang treats that as undefined and drops main (also on the host)
+medce-1 expects dead code to be removed at -O0: clang keeps the call in an if (0) that a case label jumps into (also on the host)
 
 # GCC extensions clang does not have.
 20010209-1 nested functions
