@@ -114,27 +114,42 @@
             src = compiler-explorer;
           };
 
-          # Compiler Explorer with only the m6809 compilers configured.
+          # Compiler Explorer with only the m6809 and m6800 compilers configured.
           # Extra arguments go to compiler-explorer, e.g. --port 8080.
           compiler-explorer-m6809 =
             let
               ce = self.packages.${system}.compiler-explorer;
-              # CE's Intel-syntax filter adds an x86-only flag in binary
-              # mode, which llvm-objdump without the X86 target rejects.
-              objdump = pkgs.writeShellScript "m6809-objdump" ''
+              # Runs exe without the flags CE adds for host tools that ours
+              # reject: the x86 syntax flag of its Intel-syntax filter (for
+              # objdump, llc and rustc) and GNU c++filt's --no-verbose.
+              ceTool = name: exe: pkgs.writeShellScript name ''
                 args=()
                 for a in "$@"; do
-                  [[ $a == --x86-asm-syntax=* ]] || args+=("$a")
+                  case $a in
+                    *x86-asm-syntax=*|--no-verbose) ;;
+                    *) args+=("$a") ;;
+                  esac
                 done
-                exec ${m6809-toolchain}/bin/llvm-objdump "''${args[@]}"
+                exec ${exe} "''${args[@]}"
               '';
+              objdump = ceTool "m6809-objdump" "${m6809-toolchain}/bin/llvm-objdump";
+              llc = ceTool "m6809-llc" "${m6809-toolchain}/bin/llc";
+              cxxfilt = ceTool "m6809-cxxfilt" "${m6809-toolchain}/bin/llvm-cxxfilt";
+              # TODO: build rustc in nix. Until then this runs the rustc in
+              # $M6809_RUSTC, which the launcher points at the stage 1 build
+              # in third_party/rust.
+              rustc = ceTool "m6809-rustc" ''"''${M6809_RUSTC:?is not set}"'';
               rootDir = pkgs.runCommand "compiler-explorer-m6809-etc" { } ''
                 cp -r ${ce}/share/compiler-explorer/etc $out
                 chmod -R u+w $out
                 for f in ${./nix/compiler-explorer}/*.properties; do
                   substitute $f $out/config/$(basename $f) \
                     --replace-quiet @toolchain@ ${m6809-toolchain} \
-                    --replace-quiet @sim@ ${m6809-sim} \
+                    --replace-quiet @m6809sim@ ${m6809-sim} \
+                    --replace-quiet @m6800sim@ ${m6800-sim} \
+                    --replace-quiet @rustc@ ${rustc} \
+                    --replace-quiet @llc@ ${llc} \
+                    --replace-quiet @cxxfilt@ ${cxxfilt} \
                     --replace-quiet @objdump@ ${objdump}
                 done
               '';
