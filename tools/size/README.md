@@ -13,3 +13,9 @@ CMOC needs lwtools. Both build from source into `third_party/prefix`:
 
 The benchmarks are small routines of the kind found in 8-bit firmware. They
 are written so CMOC accepts them too (it rejects some implicit narrowing).
+
+## Status
+
+At `-Oz` the clang total is 2362 bytes against 2377 for CMOC 0.1.100
+(ratio 0.99). The biggest gaps left are `isqrt32` (32-bit locals that
+CMOC keeps in memory) and `rotl` (variable shifts).
