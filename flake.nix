@@ -155,7 +155,7 @@
               '';
             in pkgs.writeShellApplication {
               name = "compiler-explorer-m6809";
-              runtimeInputs = [ pkgs.coreutils pkgs.findutils ];
+              runtimeInputs = [ pkgs.coreutils pkgs.findutils pkgs.git ];
               text = builtins.replaceStrings [ "@ce@" "@etc@" ]
                 [ (pkgs.lib.getExe ce) "${rootDir}" ]
                 (builtins.readFile ./nix/compiler-explorer/wrapper.sh);

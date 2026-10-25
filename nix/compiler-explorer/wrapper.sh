@@ -15,12 +15,21 @@ localStorageFolder=$state/storage
 PROPS
 
 # Rust needs an m6809 rustc, which is not built by nix yet (TODO). Use
-# $M6809_RUSTC, or the stage 1 build in third_party/rust when this is run
-# from the top of the repository.
+# $M6809_RUSTC, or the stage 1 build in third_party/rust of the repository
+# this is run from. third_party is not in git, so for a worktree look in
+# the main checkout too.
 languages=(c c++ llvm)
 if [ -z "${M6809_RUSTC:-}" ]; then
-  for r in "$PWD"/third_party/rust/build/*/stage1/bin/rustc; do
-    if [ -x "$r" ]; then M6809_RUSTC=$r; break; fi
+  roots=("$PWD")
+  if top=$(git rev-parse --show-toplevel 2>/dev/null); then
+    common=$(git rev-parse --path-format=absolute --git-common-dir)
+    roots+=("$top" "$(dirname "$common")")
+  fi
+  for root in "${roots[@]}"; do
+    for r in "$root"/third_party/rust/build/host/stage1/bin/rustc \
+             "$root"/third_party/rust/build/*/stage1/bin/rustc; do
+      if [ -x "$r" ]; then M6809_RUSTC=$r; break 2; fi
+    done
   done
 fi
 if [ -n "${M6809_RUSTC:-}" ]; then
