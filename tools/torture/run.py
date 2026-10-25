@@ -145,7 +145,8 @@ def run_one(args):
             return name, 'COMPILE-ERROR', first.strip()[:200]
         try:
             r = subprocess.run([SIM, '-max', str(max_insns), exe],
-                               capture_output=True, text=True, timeout=600)
+                               capture_output=True, text=True,
+                               errors='replace', timeout=600)
         except subprocess.TimeoutExpired:
             return name, 'TIMEOUT', 'wall clock'
         if r.returncode == 0:
