@@ -28,7 +28,16 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          inherit (self.packages.${system}) llvm-m6809 m6809-toolchain m6809-sim;
+          inherit (self.packages.${system}) llvm-m6809 m6809-toolchain m6809-sim m6800-sim;
+
+          simulator = cpu: desc: pkgs.stdenv.mkDerivation {
+            pname = "${cpu}-sim";
+            version = "0";
+            src = ./tools/${cpu}-sim;
+            installPhase = "install -Dm755 ${cpu}-sim -t $out/bin";
+            meta.description = desc;
+            meta.mainProgram = "${cpu}-sim";
+          };
         in {
           # clang, lld, llc, llvm-mc etc. with only the M6809 and M6800 targets.
           # Built with clang like configure.sh does. With GCC, LLVM turns off
@@ -59,9 +68,9 @@
             meta.description = "LLVM, clang and lld with the experimental M6809 and M6800 backends";
           };
 
-          # llvm-m6809 plus the runtime (crt0, compiler-rt builtins, libc and
-          # the m6809-sim board library), so that `clang --target=m6809 x.c`
-          # links. clang finds the runtime relative to its own binary, so the
+          # llvm-m6809 plus the runtime for both targets (crt0, compiler-rt
+          # builtins, libc and the simulator board libraries), so that
+          # `clang --target=m6809 x.c` and `--target=m6800` link. clang finds the runtime relative to its own binary, so the
           # tools are copied rather than symlinked.
           m6809-toolchain = pkgs.stdenv.mkDerivation {
             pname = "m6809-toolchain";
@@ -83,27 +92,23 @@
               cp -r ${llvm-m6809}/lib/clang $out/lib/
               chmod -R u+w $out
 
-              make install LLVM_BUILD=$out LLVM_SRC=${llvm-project} \
-                -j$NIX_BUILD_CORES
+              for target in m6809 m6800; do
+                make install TARGET=$target LLVM_BUILD=$out \
+                  LLVM_SRC=${llvm-project} -j$NIX_BUILD_CORES
+              done
               runHook postBuild
             '';
 
             dontInstall = true;
-            # The host strip would mangle the 6809 objects and archives.
+            # The host strip would mangle the 6809 and 6800 objects.
             dontStrip = true;
 
-            meta.description = "clang toolchain and runtime for the M6809";
+            meta.description = "clang toolchain and runtime for the M6809 and M6800";
           };
 
-          # The 6809 simulator the runtime tests and c-torture run on.
-          m6809-sim = pkgs.stdenv.mkDerivation {
-            pname = "m6809-sim";
-            version = "0";
-            src = ./tools/m6809-sim;
-            installPhase = "install -Dm755 m6809-sim -t $out/bin";
-            meta.description = "6809 simulator for running compiled test programs";
-            meta.mainProgram = "m6809-sim";
-          };
+          # The simulators the runtime tests and c-torture run on.
+          m6809-sim = simulator "m6809" "6809 and HD6309 simulator for test programs";
+          m6800-sim = simulator "m6800" "HD6301 simulator for test programs";
 
           compiler-explorer = pkgs.callPackage ./nix/compiler-explorer/package.nix {
             src = compiler-explorer;
