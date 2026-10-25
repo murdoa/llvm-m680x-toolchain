@@ -3,6 +3,7 @@
 #![no_std]
 
 use core::hint::black_box;
+use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -83,6 +84,13 @@ pub extern "C" fn main() -> i16 {
     let f: f32 = black_box(2.5);
     if (f * f) as i16 != 6 {
         return 7;
+    }
+    static TICKS: AtomicU16 = AtomicU16::new(0);
+    static FLAG: AtomicU8 = AtomicU8::new(1);
+    TICKS.store(black_box(0x1234), Ordering::Release);
+    FLAG.store(0, Ordering::SeqCst);
+    if TICKS.load(Ordering::Acquire) != 0x1234 || FLAG.load(Ordering::Relaxed) != 0 {
+        return 8;
     }
     0
 }
