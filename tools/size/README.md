@@ -16,6 +16,6 @@ are written so CMOC accepts them too (it rejects some implicit narrowing).
 
 ## Status
 
-At `-Oz` the clang total is 2323 bytes against 2377 for CMOC 0.1.100
-(ratio 0.98). The biggest gap left is `isqrt32` (32-bit locals that
-CMOC keeps in memory).
+At `-Oz` the clang total is 2304 bytes against 2377 for CMOC 0.1.100
+(ratio 0.97). With `--cpu 6309` it is 2186 bytes (0.92), mostly from W as
+a fifth register, the register-register ops and MULD.
