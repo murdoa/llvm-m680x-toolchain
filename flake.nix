@@ -132,6 +132,15 @@
               done
               runHook postBuild
             '';
+            # The register size test and the image size check (10% spare).
+            doCheck = true;
+            checkPhase = ''
+              runHook preCheck
+              for b in earthy floating; do
+                ctest --test-dir build/$b --output-on-failure
+              done
+              runHook postCheck
+            '';
             installPhase = ''
               runHook preInstall
               for b in earthy floating; do
@@ -208,6 +217,26 @@
           program = nixpkgs.lib.getExe self.packages.${system}.compiler-explorer-m6809;
         };
       });
+
+      checks = forAllSystems (system:
+        let pkgs = nixpkgs.legacyPackages.${system};
+        in {
+          inherit (self.packages.${system}) solartron-firmware;
+          # The firmware's portable modules, on the build machine with the
+          # address and undefined-behaviour sanitizers.
+          firmware-host-tests = pkgs.clangStdenv.mkDerivation {
+            name = "firmware-host-tests";
+            src = pkgs.lib.cleanSourceWith {
+              src = ./firmware;
+              filter = path: type: baseNameOf path != "build";
+            };
+            nativeBuildInputs = with pkgs; [ cmake ninja python3 ];
+            cmakeFlags = [ "-DBOARD=host" ];
+            doCheck = true;
+            checkPhase = "ctest --output-on-failure";
+            installPhase = "touch $out";
+          };
+        });
 
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in {
