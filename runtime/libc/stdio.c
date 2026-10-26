@@ -10,30 +10,6 @@
 int __board_putc(int c);
 int __board_getc(void);
 
-struct __file {
-  int unused;
-};
-static struct __file files[3];
-FILE *const stdin = &files[0];
-FILE *const stdout = &files[1];
-FILE *const stderr = &files[2];
-
-int putchar(int c) { return __board_putc(c); }
-int getchar(void) { return __board_getc(); }
-int fputc(int c, FILE *f) { return __board_putc(c); }
-
-int fputs(const char *s, FILE *f) {
-  while (*s)
-    __board_putc(*s++);
-  return 0;
-}
-
-int puts(const char *s) {
-  fputs(s, stdout);
-  __board_putc('\n');
-  return 0;
-}
-
 // Output goes to the console, or to a buffer when buf is set.
 struct out {
   char *buf;

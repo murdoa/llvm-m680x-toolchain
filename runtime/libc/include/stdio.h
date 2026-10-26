@@ -13,6 +13,7 @@ int getchar(void);
 int puts(const char *s);
 int fputc(int c, FILE *f);
 int fputs(const char *s, FILE *f);
+size_t fwrite(const void *p, size_t size, size_t n, FILE *f);
 #define putc fputc
 int printf(const char *fmt, ...);
 int fprintf(FILE *f, const char *fmt, ...);
