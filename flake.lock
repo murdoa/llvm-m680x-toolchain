@@ -19,11 +19,11 @@
     "llvm-project": {
       "flake": false,
       "locked": {
-        "lastModified": 1792979988,
-        "narHash": "sha256-NhJHAqaTZUR0HmtAbPeYs3CRuBGG6raNK4T0Hd/nYZ8=",
+        "lastModified": 1793004036,
+        "narHash": "sha256-tg5jKWL+JvBjjHGGGi6JCkEiNyRVY9YaA7+9lCJds8k=",
         "owner": "murdoa",
         "repo": "llvm-project",
-        "rev": "ee81912d8e2515c8f3316a3c594e80719117c9ae",
+        "rev": "ec97008ee57c33dcde129e96021ca097aec930c8",
         "type": "github"
       },
       "original": {
@@ -74,11 +74,11 @@
     "solartron-workbench": {
       "flake": false,
       "locked": {
-        "lastModified": 1792952510,
-        "narHash": "sha256-D9qLWyJ5GdcQIlKRcrp4BcxRail5MDyAuvC4PnstESo=",
+        "lastModified": 1793014842,
+        "narHash": "sha256-+MT7DNMeoPCwnIMhGGF7ZZVGkVqPdQJeOIWfMvvV3ps=",
         "ref": "refs/heads/main",
-        "rev": "c389ecc98af5752e5841144b7ce0581cbd923f45",
-        "revCount": 353,
+        "rev": "d67a84ead7381359a000bca876fbb31801446583",
+        "revCount": 355,
         "type": "git",
         "url": "file:../solartron"
       },
