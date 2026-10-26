@@ -109,6 +109,40 @@
             meta.description = "clang toolchain and runtime for the M6809 and M6800";
           };
 
+          # New firmware for both boards of the Solartron 7081, as EPROM
+          # images: earthy/ holds earthy.bin (6000-FFFF) and one file per
+          # 8 KB chip, floating/ holds floating.bin (E000-FFFF).
+          solartron-firmware = pkgs.stdenv.mkDerivation {
+            pname = "solartron-firmware";
+            version = "0";
+            src = pkgs.lib.cleanSourceWith {
+              src = ./firmware;
+              filter = path: type: baseNameOf path != "build";
+            };
+            nativeBuildInputs = with pkgs; [ cmake ninja python3 ];
+            dontConfigure = true;
+            buildPhase = ''
+              runHook preBuild
+              for board in earthy:m6809 floating:m6800; do
+                b=''${board%%:*}
+                cmake -G Ninja -S . -B build/$b -DBOARD=$b \
+                  -DCMAKE_TOOLCHAIN_FILE=cmake/''${board##*:}.cmake \
+                  -DM6809_TOOLCHAIN=${m6809-toolchain}
+                ninja -C build/$b
+              done
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              for b in earthy floating; do
+                install -Dm644 -t $out/$b build/$b/image/*.bin
+              done
+              runHook postInstall
+            '';
+            dontStrip = true;
+            meta.description = "C++26 firmware for the Solartron 7081 earthy and floating boards";
+          };
+
           # The simulators the runtime tests and c-torture run on.
           m6809-sim = simulator "m6809" "6809 and HD6309 simulator for test programs";
           m6800-sim = simulator "m6800" "HD6301 simulator for test programs";
