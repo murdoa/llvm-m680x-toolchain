@@ -19,9 +19,24 @@
       url = "github:compiler-explorer/compiler-explorer";
       flake = false;
     };
+
+    # The Solartron workbench (emulator, scenarios, golden traces), read
+    # only, and the original ROM dumps, which it keeps outside git. The
+    # firmware's differential and acceptance tests run against them. On
+    # another machine: --override-input solartron-workbench <path> (and
+    # solartron-roms).
+    solartron-workbench = {
+      url = "git+file:../solartron";
+      flake = false;
+    };
+    solartron-roms = {
+      url = "path:./Solartron%207081%20ROMs";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, llvm-project, compiler-explorer }:
+  outputs = { self, nixpkgs, llvm-project, compiler-explorer
+            , solartron-workbench, solartron-roms }:
     let
       forAllSystems = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" ];
     in {
@@ -29,6 +44,13 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           inherit (self.packages.${system}) llvm-m6809 m6809-toolchain m6809-sim m6800-sim;
+
+          # The workbench with its ROM dumps where it looks for them.
+          workbench = pkgs.runCommand "solartron-workbench" { } ''
+            cp -r ${solartron-workbench} $out
+            chmod -R u+w $out
+            cp -r ${solartron-roms} "$out/Solartron 7081 ROMs"
+          '';
 
           simulator = cpu: desc: pkgs.stdenv.mkDerivation {
             pname = "${cpu}-sim";
@@ -132,10 +154,12 @@
               done
               runHook postBuild
             '';
-            # The register size test and the image size check (10% spare).
+            # The register and image size checks (10% spare) and the number
+            # routines' differential test against the original ROM.
             doCheck = true;
             checkPhase = ''
               runHook preCheck
+              export SOLARTRON_WORKBENCH=${workbench}
               for b in earthy floating; do
                 ctest --test-dir build/$b --output-on-failure
               done
@@ -151,6 +175,8 @@
             dontStrip = true;
             meta.description = "C++26 firmware for the Solartron 7081 earthy and floating boards";
           };
+
+          solartron-workbench = workbench;
 
           # The simulators the runtime tests and c-torture run on.
           m6809-sim = simulator "m6809" "6809 and HD6309 simulator for test programs";
@@ -222,6 +248,23 @@
         let pkgs = nixpkgs.legacyPackages.${system};
         in {
           inherit (self.packages.${system}) solartron-firmware;
+          # Every acceptance scenario on the emulated instrument: both new
+          # images together and each with the other board's original,
+          # against the golden traces (with the BUGS.md differences).
+          firmware-acceptance = pkgs.runCommand "firmware-acceptance" {
+            nativeBuildInputs = [ pkgs.python3 ];
+            SOLARTRON_WORKBENCH = self.packages.${system}.solartron-workbench;
+          } ''
+            fw=${self.packages.${system}.solartron-firmware}
+            cd ${pkgs.lib.cleanSourceWith {
+              src = ./firmware;
+              filter = path: type: baseNameOf path != "build";
+            }}
+            python3 -I -B tests/acceptance/run.py \
+              --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
+              --pairs both,earthy,floating -j $NIX_BUILD_CORES
+            touch $out
+          '';
           # The firmware's portable modules, on the build machine with the
           # address and undefined-behaviour sanitizers.
           firmware-host-tests = pkgs.clangStdenv.mkDerivation {

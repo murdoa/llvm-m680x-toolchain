@@ -53,7 +53,38 @@
       "inputs": {
         "compiler-explorer": "compiler-explorer",
         "llvm-project": "llvm-project",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "solartron-roms": "solartron-roms",
+        "solartron-workbench": "solartron-workbench"
+      }
+    },
+    "solartron-roms": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792503765,
+        "narHash": "sha256-4Tlb7J8kM4Oo4tyowh45OaYKO/vkDLVL5o/GVK5dhk8=",
+        "path": "./Solartron 7081 ROMs",
+        "type": "path"
+      },
+      "original": {
+        "path": "./Solartron 7081 ROMs",
+        "type": "path"
+      }
+    },
+    "solartron-workbench": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792952510,
+        "narHash": "sha256-D9qLWyJ5GdcQIlKRcrp4BcxRail5MDyAuvC4PnstESo=",
+        "ref": "refs/heads/main",
+        "rev": "c389ecc98af5752e5841144b7ce0581cbd923f45",
+        "revCount": 353,
+        "type": "git",
+        "url": "file:../solartron"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:../solartron"
       }
     }
   },
