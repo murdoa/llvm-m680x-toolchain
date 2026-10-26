@@ -69,14 +69,17 @@
           };
 
           # llvm-m6809 plus the runtime for both targets (crt0, compiler-rt
-          # builtins, libc and the simulator board libraries), so that
-          # `clang --target=m6809 x.c` and `--target=m6800` link. clang finds the runtime relative to its own binary, so the
-          # tools are copied rather than symlinked.
+          # builtins, libc, libc++ and the simulator board libraries), so
+          # that `clang --target=m6809 x.c`, `clang++ -std=c++26` and
+          # `--target=m6800` link. clang finds the runtime relative to its
+          # own binary, so the tools are copied rather than symlinked.
           m6809-toolchain = pkgs.stdenv.mkDerivation {
             pname = "m6809-toolchain";
             inherit (llvm-m6809) version;
             src = ./runtime;
 
+            # cmake generates the libc++ headers; the runtime Makefile runs it.
+            nativeBuildInputs = with pkgs; [ cmake ninja python3 ];
             dontConfigure = true;
 
             buildPhase = ''
