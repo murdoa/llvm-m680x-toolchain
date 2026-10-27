@@ -251,6 +251,9 @@
           # Every acceptance scenario on the emulated instrument: both new
           # images together and each with the other board's original,
           # against the golden traces (with the BUGS.md differences).
+          # On the Python model: the pinned workbench's emu-rs has no
+          # clocked ADC (accept --adc-schedule) yet, and the sandbox has no
+          # cargo to build it.
           firmware-acceptance = pkgs.runCommand "firmware-acceptance" {
             nativeBuildInputs = [ pkgs.python3 ];
             SOLARTRON_WORKBENCH = self.packages.${system}.solartron-workbench;
@@ -262,7 +265,7 @@
             }}
             python3 -I -B tests/acceptance/run.py \
               --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
-              --pairs both,earthy,floating -j $NIX_BUILD_CORES
+              --pairs both,earthy,floating --engine python -j $NIX_BUILD_CORES
             touch $out
           '';
           # The firmware's portable modules, on the build machine with the
