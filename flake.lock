@@ -19,11 +19,11 @@
     "llvm-project": {
       "flake": false,
       "locked": {
-        "lastModified": 1793140967,
-        "narHash": "sha256-dUOXjEXLR/9Y1hMAUR5HWsJ3wxtEsFAcqB0Z/0tiKvk=",
+        "lastModified": 1793148254,
+        "narHash": "sha256-ktM/5zhTv3BnhN9AdSabwM+/V1MoqJuy8WWzfEptr1E=",
         "owner": "murdoa",
         "repo": "llvm-project",
-        "rev": "c51c356c863aeea5c0a3be241f2e1250c0b78380",
+        "rev": "763fd1cfec25869f6932e64aec896d61a5438ec5",
         "type": "github"
       },
       "original": {
