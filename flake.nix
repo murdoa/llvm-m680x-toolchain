@@ -266,6 +266,10 @@
             python3 -I -B tests/acceptance/run.py \
               --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
               --pairs both,earthy,floating --engine python -j $NIX_BUILD_CORES
+            # The BUGS.md entries no workbench scenario shows.
+            python3 -I -B tests/acceptance/bug_tests.py \
+              --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
+              -j $NIX_BUILD_CORES
             touch $out
           '';
           # The firmware's portable modules, on the build machine with the
