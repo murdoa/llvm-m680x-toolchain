@@ -266,6 +266,8 @@
             python3 -I -B tests/acceptance/run.py \
               --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
               --pairs both,earthy,floating --engine python -j $NIX_BUILD_CORES
+            # Each BUGS.md entry has a test the original fails.
+            python3 -I -B tests/acceptance/register_tests.py
             # The BUGS.md entries no workbench scenario shows.
             python3 -I -B tests/acceptance/bug_tests.py \
               --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
