@@ -270,6 +270,10 @@
             python3 -I -B tests/acceptance/bug_tests.py \
               --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
               -j $NIX_BUILD_CORES
+            # The watchdogs' and the 1 ms tick's timing (check 7).
+            python3 -I -B tests/acceptance/timing_tests.py \
+              --earthy $fw/earthy/earthy.bin --floating $fw/floating/floating.bin \
+              -j $NIX_BUILD_CORES
             touch $out
           '';
           # The firmware's portable modules, on the build machine with the
