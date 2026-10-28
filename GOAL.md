@@ -61,3 +61,7 @@ Each item can be checked.
 | M7 | Rust `core` on both backends | Rust (**done**: `m6809-none-elf` and `m6800-none-elf` build `core` and `alloc`, and a no_std test with traits, `Option`, u64 and f32 runs on the 6809, HD6309 and HD6301 at -O0, -O2 and -Oz; see rust/) |
 | M8 | Solartron routines replaced on both CPUs | Real-world proof (**done**: the earthy calibration-transfer check (6809) and the floating acquisition coefficient (HD6301) are C, patched into the ROMs, and both images pass all 193 acceptance scenarios; see solartron/) |
 | M9 | Clean-up and RFC | Upstream (**done**: the machine verifier is clean on all of c-torture for the three CPUs, functions get their own subtarget, the code is clang-formatted and builds without warnings, and RFC.md is approved; it has not been posted) |
+
+The full replacement firmware for both boards, built with this toolchain,
+lives in the workbench: `../solartron/firmware/` (moved there on
+2026-10-28 with its history; its flake takes `m6809-toolchain` from here).
