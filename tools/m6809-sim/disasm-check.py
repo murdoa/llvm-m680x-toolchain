@@ -8,7 +8,7 @@ instruction, so it does not depend on where the instruction jumps.
 
 usage: disasm-check.py PYTHON_CORE_DIR LLVM_BIN_DIR
 
-PYTHON_CORE_DIR holds emu/mc6809.py (solartron-emu/scripts).
+PYTHON_CORE_DIR holds emu/mc6809.py (the Solartron workbench's bench/).
 """
 import os
 import re

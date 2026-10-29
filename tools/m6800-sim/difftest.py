@@ -14,7 +14,7 @@ mode sees the same plain memory as m6800-sim.
 
 usage: difftest.py PYTHON_CORE_DIR [CASES] [SEED]
 
-PYTHON_CORE_DIR holds emu/hd6301.py (solartron/scripts).
+PYTHON_CORE_DIR holds emu/hd6301.py (the Solartron workbench's bench/).
 """
 import os
 import random

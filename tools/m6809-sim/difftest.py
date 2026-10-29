@@ -10,7 +10,7 @@ postbyte) must also stop the C simulator, as "undefined instruction".
 
 usage: difftest.py PYTHON_CORE_DIR [CASES] [SEED]
 
-PYTHON_CORE_DIR holds emu/mc6809.py (solartron-emu/scripts).
+PYTHON_CORE_DIR holds emu/mc6809.py (the Solartron workbench's bench/).
 """
 import os
 import random
