@@ -32,8 +32,8 @@ Each item can be checked.
    and runs in an emulator.
 7. **Solartron proof.** At least one non-trivial routine on each processor,
    rewritten in C or Rust and built with this toolchain, passes the
-   matching oracle tests in `../solartron` and runs in place of the
-   original code in `solartron-emu`.
+   matching oracle tests in the Solartron workbench and runs in place of
+   the original code in its emulator.
 8. **Fit for upstream.** The code follows LLVM coding standards, has lit
    tests for every lowering, builds warning-free, and documents its ABI,
    which makes it reasonable to post an RFC for experimental targets.
@@ -59,9 +59,9 @@ Each item can be checked.
 | M5 | HD6309 subtarget | Extended CPU support (**done**: c-torture passes at -O0, -O2 and -Oz with `-mcpu=6309`, and 6809 code passes unchanged on the HD6309 simulator; -Oz size is 0.92 of CMOC against 0.97 for the 6809, and -O2 code takes 0.66 of the 6809 cycles, see tools/size and tools/cycles) |
 | M6 | M6800 backend for the HD6301 | Second backend (**done**: c-torture passes at -O0, -O2 and -Oz, the C++ runtime test runs, and llvm/test/CodeGen/M6800 covers the lowerings with -verify-machineinstrs; see tools/torture/known-failures-m6800.txt) |
 | M7 | Rust `core` on both backends | Rust (**done**: `m6809-none-elf` and `m6800-none-elf` build `core` and `alloc`, and a no_std test with traits, `Option`, u64 and f32 runs on the 6809, HD6309 and HD6301 at -O0, -O2 and -Oz; see rust/) |
-| M8 | Solartron routines replaced on both CPUs | Real-world proof (**done**: the earthy calibration-transfer check (6809) and the floating acquisition coefficient (HD6301) are C, patched into the ROMs, and both images pass all 193 acceptance scenarios; see solartron/) |
-| M9 | Clean-up and RFC | Upstream (**done**: the machine verifier is clean on all of c-torture for the three CPUs, functions get their own subtarget, the code is clang-formatted and builds without warnings, and RFC.md is approved; it has not been posted) |
+| M8 | Solartron routines replaced on both CPUs | Real-world proof (**done**: the earthy calibration-transfer check (6809) and the floating acquisition coefficient (HD6301) are C, patched into the ROMs, and both images pass all 193 acceptance scenarios in the Solartron workbench) |
+| M9 | Clean-up and RFC | Upstream (**done**: the machine verifier is clean on all of c-torture for the three CPUs, functions get their own subtarget, the code is clang-formatted and builds without warnings, and [rfc.md](rfc.md) is approved; it has not been posted) |
 
 The full replacement firmware for both boards, built with this toolchain,
-lives in the workbench: `../solartron/firmware/` (moved there on
-2026-10-28 with its history; its flake takes `m6809-toolchain` from here).
+lives in the Solartron workbench (`firmware/`), whose flake takes the
+toolchain from this repository.
