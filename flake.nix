@@ -80,6 +80,24 @@
           default = app p.m680x-toolchain "clang";
         });
 
+      checks = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          p = self.packages.${system};
+        in import ./nix/checks.nix {
+          inherit (pkgs) runCommand gnumake;
+          inherit (p) m6809-sim m6800-sim;
+          toolchain = p.m680x-toolchain;
+        } // {
+          inherit (p) compiler-explorer-m6809;
+        });
+
+      # nix flake init -t github:murdoa/llvm-m680x-toolchain
+      templates.default = {
+        path = ./templates/hello;
+        description = "A C program for the 6809 and HD6301, run in the simulators";
+      };
+
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in {
           default = pkgs.mkShell {
