@@ -1,5 +1,5 @@
 {
-  description = "LLVM backends for the Motorola 6809 / HD6309 and HD6301";
+  description = "LLVM, clang and Rust for the Motorola 6800/6809 family (6800, 6801, HD6301, 6809, HD6309)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -32,11 +32,17 @@
           simulator = cpu: description:
             pkgs.callPackage ./nix/simulator.nix { inherit cpu description; };
         in {
-          llvm-m6809 = pkgs.callPackage ./nix/llvm.nix { inherit llvm-project; };
-          m6809-toolchain = pkgs.callPackage ./nix/toolchain.nix {
+          # LLVM with the M6809 and M6800 targets: clang, lld and the tools.
+          llvm = pkgs.callPackage ./nix/llvm.nix { inherit llvm-project; };
+          # That plus the runtime for both targets: what most users want.
+          m680x-toolchain = pkgs.callPackage ./nix/toolchain.nix {
             inherit llvm-project;
-            llvm = p.llvm-m6809;
+            inherit (p) llvm;
+            pname = "m680x-toolchain";
           };
+          # The names before the repository was renamed.
+          llvm-m6809 = p.llvm;
+          m6809-toolchain = p.m680x-toolchain;
 
           m6809-sim = simulator "m6809" "6809 and HD6309 simulator for test programs";
           m6800-sim = simulator "m6800" "HD6301 simulator for test programs";
@@ -46,19 +52,33 @@
           };
           compiler-explorer-m6809 = pkgs.callPackage ./nix/compiler-explorer/m680x.nix {
             inherit (p) compiler-explorer m6809-sim m6800-sim;
-            toolchain = p.m6809-toolchain;
+            toolchain = p.m680x-toolchain;
           };
 
-          default = p.m6809-toolchain;
+          default = p.m680x-toolchain;
         });
 
-      apps = forAllSystems (system: {
-        # nix run .#compiler-explorer, then open http://localhost:10240
-        compiler-explorer = {
-          type = "app";
-          program = nixpkgs.lib.getExe self.packages.${system}.compiler-explorer-m6809;
-        };
-      });
+      # The toolchain and simulators in another flake's nixpkgs:
+      # nixpkgs.overlays = [ llvm-m680x-toolchain.overlays.default ].
+      overlays.default = final: prev: {
+        inherit (self.packages.${final.stdenv.hostPlatform.system})
+          m680x-toolchain m6809-sim m6800-sim;
+      };
+
+      apps = forAllSystems (system:
+        let
+          p = self.packages.${system};
+          app = drv: exe: { type = "app"; program = "${drv}/bin/${exe}"; };
+        in {
+          # nix run .#clang -- --target=m6809 hello.c
+          clang = app p.m680x-toolchain "clang";
+          "clang++" = app p.m680x-toolchain "clang++";
+          m6809-sim = app p.m6809-sim "m6809-sim";
+          m6800-sim = app p.m6800-sim "m6800-sim";
+          # nix run .#compiler-explorer, then open http://localhost:10240
+          compiler-explorer = app p.compiler-explorer-m6809 "compiler-explorer-m6809";
+          default = app p.m680x-toolchain "clang";
+        });
 
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in {
