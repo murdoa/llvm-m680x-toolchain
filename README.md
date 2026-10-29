@@ -21,7 +21,7 @@ which takes a long time.
 
 Experimental. The backends live on a fork of LLVM
 ([murdoa/llvm-project](https://github.com/murdoa/llvm-project), branch
-`m6809`) and are not upstream; an [RFC](docs/rfc.md) is drafted.
+`m6809`) and are not upstream.
 
 - Every applicable GCC c-torture execute test passes at `-O0`, `-O2` and
   `-Oz` on the 6809, the HD6309 and the HD6301, with the machine verifier
@@ -88,7 +88,6 @@ use `stdio.h`.
 - [Compiler Explorer](docs/compiler-explorer.md)
 - [Working on the toolchain](docs/development.md)
 - [Goals and milestones](docs/goals.md)
-- [Upstream RFC draft](docs/rfc.md)
 
 ## Licence
 

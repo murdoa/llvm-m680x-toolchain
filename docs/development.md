@@ -57,4 +57,4 @@ After `nix flake update compiler-explorer`, update `npmDepsHash` in
 | `tools/torture`, `tools/size`, `tools/cycles`, `tools/statemachine` | test and measurement harnesses |
 | `rust/` | patches and scripts for rustc |
 | `templates/hello` | the `nix flake init` template |
-| `docs/` | these documents, the project goals and the upstream RFC |
+| `docs/` | these documents and the project goals |

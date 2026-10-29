@@ -1,5 +1,5 @@
 {
-  description = "LLVM, clang and Rust for the Motorola 6800/6809 family (6800, 6801, HD6301, 6809, HD6309)";
+  description = "C, C++ and Rust for the Motorola 6809, Hitachi HD6309 and HD6301/HD6303, on LLVM";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
